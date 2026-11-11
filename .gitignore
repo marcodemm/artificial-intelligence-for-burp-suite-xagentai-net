@@ -1,0 +1,54 @@
+# Java
+*.class
+*.war
+*.ear
+hs_err_pid*
+replay_pid*
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/
+gradle-app.setting
+
+# JARs (except the gradle wrapper)
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE — IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# IDE — Eclipse / VSCode
+.project
+.classpath
+.settings/
+.metadata/
+.vscode/
+bin/
+
+# IDE — editor swap files
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+._*
+
+# Logs
+*.log
+logs/
+
+# Secrets / local config (never commit)
+.env
+.env.local
+local.properties
+secrets.properties
+gradle.properties.local
+
+# BApp Store packaging output
+dist/
