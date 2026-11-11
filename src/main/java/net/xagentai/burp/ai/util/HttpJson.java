@@ -48,30 +48,10 @@ public final class HttpJson {
         if (!hasContentType) {
             req = setHeader(req, "Content-Type", "application/json");
         }
-        // Content-Length is required for POST; make sure it matches the
-        // actual UTF-8 byte count we're shipping (Burp may add it from the
-        // String length, which is wrong for multi-byte UTF-8 chars like '—').
+        // Content-Length must match the actual UTF-8 byte count: Java's
+        // String.length() returns UTF-16 code units, which under-counts
+        // multi-byte characters like U+2014 EM DASH.
         req = setHeader(req, "Content-Length", Integer.toString(bodyBytes.length));
-
-        // Diagnostic log — remove once the HTTP 400 "control character"
-        // issue is fully nailed down.
-        api.logging().logToOutput("[HttpJson.post] url=" + url
-                + " jsonLen(chars)=" + jsonBody.length()
-                + " bodyLen(utf8-bytes)=" + bodyBytes.length);
-        int center = Math.min(239, jsonBody.length());
-        int lo = Math.max(0, center - 20);
-        int hi = Math.min(jsonBody.length(), center + 20);
-        StringBuilder hex = new StringBuilder();
-        StringBuilder txt = new StringBuilder();
-        for (int i = lo; i < hi; i++) {
-            char c = jsonBody.charAt(i);
-            hex.append(String.format("%04X ", (int) c));
-            txt.append((c < 0x20 || c > 0x7E) ? '.' : c);
-        }
-        api.logging().logToOutput("[HttpJson.post] chars[" + lo + "-" + hi
-                + "] hex=" + hex.toString().trim());
-        api.logging().logToOutput("[HttpJson.post] chars[" + lo + "-" + hi
-                + "] txt=" + txt);
 
         RequestOptions opts = RequestOptions.requestOptions()
                 .withResponseTimeout(Math.max(5, timeoutSeconds) * 1000L);
