@@ -129,7 +129,37 @@ public final class HttpRequestSerializer {
 
     private static String truncate(String s, int max) {
         if (s == null) return "";
-        if (s.length() <= max) return s;
-        return s.substring(0, max) + "\n\n[... truncated to " + max + " chars ...]";
+        String cleaned = sanitizeControlChars(s);
+        if (cleaned.length() <= max) return cleaned;
+        return cleaned.substring(0, max) + "\n\n[... truncated to " + max + " chars ...]";
+    }
+
+    /**
+     * Strip the C0 control characters Gson does NOT escape by default
+     * (every byte 0x00-0x1F except TAB / LF / CR), replacing them with
+     * '?' so the result can safely go inside a JSON string.
+     *
+     * Binary bodies decoded as UTF-8 commonly land here as literal control
+     * bytes; if we leave them in, Anthropic / OpenAI reject the request
+     * with HTTP 400 "control character (\u0000-\u001F) found while
+     * parsing a string".
+     */
+    static String sanitizeControlChars(String s) {
+        if (s == null) return "";
+        StringBuilder out = null;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean bad = (c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0x7F;
+            if (bad) {
+                if (out == null) {
+                    out = new StringBuilder(s.length());
+                    out.append(s, 0, i);
+                }
+                out.append('?');
+            } else if (out != null) {
+                out.append(c);
+            }
+        }
+        return out == null ? s : out.toString();
     }
 }
