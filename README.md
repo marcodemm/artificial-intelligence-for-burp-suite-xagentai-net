@@ -130,6 +130,28 @@ The plugin also registers a top-bar **XagentAI** tab that hosts the Settings
 panel (9 sub-tabs: Active provider · Claude · OpenAI · NVIDIA · LM Studio ·
 Ollama · llama.cpp · Behaviour · About).
 
+### Note on WebSocket analysis
+
+The right-click entry on **WebSocket History** sends the selected frames
+(plus the upgrade request as context) to the AI. The tests the AI then
+proposes are almost always attacks against the **HTTP upgrade handshake**
+itself — CSWSH / `Origin` bypass, reconnect with an old session, auth
+bypass on signed URLs, and so on — because that is where most of the
+WebSocket attack surface lives.
+
+Montoya API `2026.7` does not expose a way for an extension to open
+Repeater in WebSocket mode (`burp.api.montoya.repeater.Repeater` only
+accepts `HttpRequest`), so **Send to Repeater** opens each handshake test
+in a regular HTTP Repeater tab — which is exactly where these checks
+belong, since they are HTTP requests.
+
+For manual frame replay against an already-authenticated session, use
+Burp's own native **Send to Repeater** on a WebSocket History entry
+(that opens the dedicated WebSocket Repeater panel with the
+`To client` / `To server` dropdown and the `Reconnect` button). The two
+flows are complementary: use the plugin for handshake-level attacks, and
+Burp's native WebSocket Repeater for frame-level replay.
+
 ---
 
 ## Install
