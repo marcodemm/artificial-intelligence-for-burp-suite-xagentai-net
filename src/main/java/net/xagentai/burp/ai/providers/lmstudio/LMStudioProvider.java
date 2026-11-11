@@ -18,11 +18,6 @@ import net.xagentai.burp.ai.providers.TestResult;
 import net.xagentai.burp.ai.util.HttpJson;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -111,13 +106,10 @@ public final class LMStudioProvider implements AIProvider {
         headers.put("Content-Type", "application/json");
 
         try {
-            String resp = HttpJson.post(url, headers, body.toString(), config.lmStudioTimeoutSeconds());
+            String resp = HttpJson.post(api, url, headers, body.toString(), config.lmStudioTimeoutSeconds());
             return parseOpenAIChat(resp, model);
         } catch (IOException e) {
             throw new AIException("LM Studio call failed: " + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AIException("LM Studio call interrupted", e);
         }
     }
 
@@ -176,7 +168,7 @@ public final class LMStudioProvider implements AIProvider {
      * endpoint first (reports {@code state: "loaded"} for the active model), and
      * falls back to the OpenAI-compatible {@code /v1/models} if that is unavailable.
      */
-    public List<ModelInfo> listAvailableModels() throws IOException, InterruptedException {
+    public List<ModelInfo> listAvailableModels() throws IOException {
         String host = normalizeBase(config.lmStudioBaseUrl());
         try {
             List<ModelInfo> ext = fetchExtended(host);
@@ -187,8 +179,8 @@ public final class LMStudioProvider implements AIProvider {
         return fetchOpenAI(host);
     }
 
-    private List<ModelInfo> fetchExtended(String host) throws IOException, InterruptedException {
-        String body = httpGet(host + "/api/v0/models", 10);
+    private List<ModelInfo> fetchExtended(String host) throws IOException {
+        String body = HttpJson.get(api, host + "/api/v0/models", null, 10);
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
         JsonArray data = root.getAsJsonArray("data");
         List<ModelInfo> out = new ArrayList<>();
@@ -202,8 +194,8 @@ public final class LMStudioProvider implements AIProvider {
         return out;
     }
 
-    private List<ModelInfo> fetchOpenAI(String host) throws IOException, InterruptedException {
-        String body = httpGet(host + "/v1/models", 10);
+    private List<ModelInfo> fetchOpenAI(String host) throws IOException {
+        String body = HttpJson.get(api, host + "/v1/models", null, 10);
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
         JsonArray data = root.getAsJsonArray("data");
         List<ModelInfo> out = new ArrayList<>();
@@ -211,21 +203,6 @@ public final class LMStudioProvider implements AIProvider {
             out.add(new ModelInfo(e.getAsJsonObject().get("id").getAsString(), false));
         }
         return out;
-    }
-
-    private static String httpGet(String url, int timeoutSeconds) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(timeoutSeconds))
-                .build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(timeoutSeconds))
-                .GET()
-                .build();
-        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() / 100 != 2) {
-            throw new IOException("HTTP " + resp.statusCode() + " from " + url);
-        }
-        return resp.body();
     }
 
     /** Normalize an input base URL: strip trailing slash and drop the /v1 suffix if present. */

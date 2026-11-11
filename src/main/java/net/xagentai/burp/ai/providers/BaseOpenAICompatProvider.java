@@ -122,13 +122,10 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
         addAuthHeader(headers);
 
         try {
-            String resp = HttpJson.post(url, headers, body.toString(), timeoutSeconds());
+            String resp = HttpJson.post(api, url, headers, body.toString(), timeoutSeconds());
             return parseOpenAIChat(resp, modelId);
         } catch (IOException e) {
             throw new AIException(displayName() + " call failed: " + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AIException(displayName() + " call interrupted", e);
         }
     }
 
@@ -152,10 +149,10 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
 
     // --- Helpers -----------------------------------------------------------
 
-    protected String autoDetectModel(String base) throws IOException, InterruptedException {
+    protected String autoDetectModel(String base) throws IOException {
         Map<String, String> h = new LinkedHashMap<>();
         addAuthHeader(h);
-        String body = HttpJson.get(base + "/v1/models", h, 10);
+        String body = HttpJson.get(api, base + "/v1/models", h, 10);
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
         if (root.has("data") && root.get("data").isJsonArray()) {
             JsonArray data = root.getAsJsonArray("data");

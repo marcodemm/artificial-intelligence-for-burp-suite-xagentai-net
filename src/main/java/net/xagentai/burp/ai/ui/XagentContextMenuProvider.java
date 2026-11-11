@@ -13,6 +13,7 @@ import burp.api.montoya.ui.contextmenu.MessageEditorHttpRequestResponse;
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent;
 import burp.api.montoya.ui.contextmenu.WebSocketMessage;
 
+import net.xagentai.burp.ai.ExtensionLifecycle;
 import net.xagentai.burp.ai.config.XagentConfig;
 import net.xagentai.burp.ai.providers.AIException;
 import net.xagentai.burp.ai.providers.AIProvider;
@@ -244,7 +245,7 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
                 + " (sanitization=" + config.sanitizationMode()
                 + ", bytes=" + userMessage.length() + ")");
 
-        Thread t = new Thread(() -> {
+        ExtensionLifecycle.startTracked(api, () -> {
             long start = System.nanoTime();
             try {
                 AIResponse response = provider.send(request);
@@ -254,7 +255,9 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
                     log.logToOutput("[" + context + "] " + provider.displayName()
                             + " responded in " + ms + " ms"
                             + " (in=" + response.inputTokens() + " out=" + response.outputTokens() + ")");
-                    new ResultDialog(api, config, provider, response, ms, originalRequest).setVisible(true);
+                    ResultDialog rd = new ResultDialog(api, config, provider, response, ms, originalRequest);
+                    ExtensionLifecycle.trackWindow(rd);
+                    rd.setVisible(true);
                 });
             } catch (AIException ex) {
                 long ms = (System.nanoTime() - start) / 1_000_000L;
@@ -262,7 +265,7 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
                     waiting.dispose();
                     log.logToError("[" + context + "] " + provider.displayName()
                             + " failed in " + ms + " ms: " + ex.getMessage());
-                    JOptionPane.showMessageDialog(null,
+                    JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
                             provider.displayName() + " returned an error:\n\n" + ex.getMessage(),
                             "XagentAI — error", JOptionPane.WARNING_MESSAGE);
                 });
@@ -270,22 +273,20 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
                     log.logToError("[" + context + "] unexpected error: " + ex);
-                    JOptionPane.showMessageDialog(null,
+                    JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
                             "Unexpected error:\n\n" + ex.getMessage(),
                             "XagentAI — error", JOptionPane.WARNING_MESSAGE);
                 });
             }
         }, "xagentai-analyze");
-        t.setDaemon(true);
-        t.start();
     }
 
     private JDialog showWaitingDialog(AIProvider provider) {
-        JDialog d = new JDialog();
-        d.setTitle("XagentAI — asking " + provider.displayName());
-        d.setModal(false);
+        JDialog d = new JDialog(ExtensionLifecycle.suiteFrame(),
+                "XagentAI — asking " + provider.displayName(), false);
         d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         d.setLayout(new BorderLayout(10, 10));
+        ExtensionLifecycle.trackWindow(d);
 
         JLabel label = new JLabel("Waiting for " + provider.displayName() + "...  0s");
         JPanel center = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
@@ -312,7 +313,7 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
 
         d.setPreferredSize(new Dimension(420, 110));
         d.pack();
-        d.setLocationRelativeTo(null);
+        d.setLocationRelativeTo(ExtensionLifecycle.suiteFrame());
         d.setVisible(true);
         return d;
     }

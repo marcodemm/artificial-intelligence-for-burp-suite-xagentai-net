@@ -93,13 +93,10 @@ public final class ClaudeProvider implements AIProvider {
         headers.put("Content-Type", "application/json");
 
         try {
-            String responseBody = HttpJson.post(url, headers, body.toString(), config.claudeTimeoutSeconds());
+            String responseBody = HttpJson.post(api, url, headers, body.toString(), config.claudeTimeoutSeconds());
             return parseResponse(responseBody, model);
         } catch (IOException e) {
             throw new AIException("Claude API call failed: " + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AIException("Claude API call interrupted", e);
         }
     }
 

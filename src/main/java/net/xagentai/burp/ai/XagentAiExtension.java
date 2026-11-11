@@ -21,7 +21,7 @@ import javax.swing.SwingUtilities;
 public final class XagentAiExtension implements BurpExtension {
 
     public static final String EXTENSION_NAME = "Artificial Intelligence for Burp Suite - XagentAI";
-    public static final String EXTENSION_VERSION = "0.1.0";
+    public static final String EXTENSION_VERSION = "0.2.0";
 
     private MontoyaApi api;
     private Logging log;
@@ -43,6 +43,11 @@ public final class XagentAiExtension implements BurpExtension {
         log.logToOutput("Active provider: " + providers.active().displayName()
                 + " (sanitization = " + config.sanitizationMode() + ")");
 
+        // Cache the Burp main frame so every popup / dialog can be parented
+        // to it (BApp Store acceptance criterion 10).
+        SwingUtilities.invokeLater(() ->
+                ExtensionLifecycle.setSuiteFrame(api.userInterface().swingUtils().suiteFrame()));
+
         // Register the Settings tab on Burp's top bar.
         SwingUtilities.invokeLater(() -> {
             ConfigPanel panel = new ConfigPanel(api, config, store, providers);
@@ -54,6 +59,11 @@ public final class XagentAiExtension implements BurpExtension {
         api.userInterface().registerContextMenuItemsProvider(
                 new XagentContextMenuProvider(api, config, providers));
         log.logToOutput("Context menu provider registered.");
+
+        // Clean unload: interrupt background threads and dispose dialogs
+        // (BApp Store acceptance criterion 6).
+        api.extension().registerUnloadingHandler(() -> ExtensionLifecycle.shutdown(api));
+        log.logToOutput("Unloading handler registered.");
 
         log.logToOutput(EXTENSION_NAME + " loaded.");
     }

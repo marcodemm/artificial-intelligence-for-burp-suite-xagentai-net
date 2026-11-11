@@ -3,6 +3,7 @@ package net.xagentai.burp.ai.ui;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.logging.Logging;
 
+import net.xagentai.burp.ai.ExtensionLifecycle;
 import net.xagentai.burp.ai.config.ConfigStore;
 import net.xagentai.burp.ai.config.SanitizationMode;
 import net.xagentai.burp.ai.config.XagentConfig;
@@ -125,7 +126,7 @@ public final class ConfigPanel extends JPanel {
         JLabel hTitle = new JLabel("Artificial Intelligence for Burp Suite - XagentAI");
         hTitle.setFont(hTitle.getFont().deriveFont(Font.BOLD, 16f));
         header.add(hTitle);
-        JLabel hSub = new JLabel("v0.1.0 · xagentai.net");
+        JLabel hSub = new JLabel("v0.2.0 · xagentai.net");
         hSub.setForeground(new Color(0x808080));
         header.add(hSub);
         add(header, BorderLayout.NORTH);
@@ -402,7 +403,7 @@ public final class ConfigPanel extends JPanel {
 
         // Metadata rows (label / value)
         c.gridx = 0; c.gridy = 1; p.add(boldLabel("Version:"), c);
-        c.gridx = 1;              p.add(new JLabel("0.1.0"), c);
+        c.gridx = 1;              p.add(new JLabel("0.2.0"), c);
 
         c.gridx = 0; c.gridy = 2; p.add(boldLabel("Author:"), c);
         c.gridx = 1;              p.add(new JLabel("xagentai.net"), c);
@@ -575,7 +576,7 @@ public final class ConfigPanel extends JPanel {
             return;
         }
         flashStatus("Testing " + p.displayName() + "...", true);
-        Thread t = new Thread(() -> {
+        ExtensionLifecycle.startTracked(api, () -> {
             TestResult r = p.testConnection();
             SwingUtilities.invokeLater(() -> {
                 String msg = p.displayName() + ": "
@@ -587,8 +588,6 @@ public final class ConfigPanel extends JPanel {
                 }
             });
         }, "xagentai-test-" + providerId);
-        t.setDaemon(true);
-        t.start();
     }
 
     private void flashStatus(String msg, boolean ok) {
@@ -613,7 +612,7 @@ public final class ConfigPanel extends JPanel {
         lmRefreshButton.setEnabled(false);
         flashStatus("Refreshing models from " + config.lmStudioBaseUrl() + "...", true);
 
-        Thread t = new Thread(() -> {
+        ExtensionLifecycle.startTracked(api, () -> {
             try {
                 List<LMStudioProvider.ModelInfo> models = lm.listAvailableModels();
                 SwingUtilities.invokeLater(() -> {
@@ -649,8 +648,6 @@ public final class ConfigPanel extends JPanel {
                 });
             }
         }, "xagentai-lm-refresh");
-        t.setDaemon(true);
-        t.start();
     }
 
     /** Ensure {@code modelId} is present in the combo and selected. */

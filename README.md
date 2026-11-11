@@ -5,7 +5,7 @@
 > AI-proposed tests to Repeater or Intruder with a single click.
 
 - **Name in Burp:** `Artificial Intelligence for Burp Suite - XagentAI`
-- **Version:** `0.1.0`
+- **Version:** `0.2.0`
 - **Author:** [xagentai.net](https://xagentai.net)
 - **License:** [Apache-2.0](LICENSE)
 - **Burp API:** Montoya API (`2026.7`)
@@ -34,6 +34,17 @@
 on PortSwigger's [Montoya API](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/).
 It gives the operator a right-click entry point — **Analyze with AI** — on
 every request-bearing panel of Burp.
+
+### Positioning
+
+**This is not a conversational AI agent you chat with.** It is a bridge
+between Burp's own native workflows (Proxy History, Repeater, Intruder,
+Scanner, Target Site Map, WebSocket History) and external AI providers —
+one right-click sends the request you already have in front of you to the
+AI, and the AI's proposed tests land back where they belong in Burp
+(Repeater tabs, Intruder with `§...§` positions). The operator stays in
+control of every action; there is no autonomous mode, no agent loop and
+no tool-calling layer in front of Burp.
 
 The result dialog renders the AI's answer (Markdown → HTML) and exposes three
 action buttons:

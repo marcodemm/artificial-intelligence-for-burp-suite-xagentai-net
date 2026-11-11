@@ -7,6 +7,7 @@ import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.intruder.HttpRequestTemplate;
 
+import net.xagentai.burp.ai.ExtensionLifecycle;
 import net.xagentai.burp.ai.config.XagentConfig;
 import net.xagentai.burp.ai.providers.AIException;
 import net.xagentai.burp.ai.providers.AIProvider;
@@ -215,7 +216,7 @@ public final class ResultDialog extends JDialog {
         getRootPane().setDefaultButton(closeBtn);
 
         pack();
-        setLocationRelativeTo(null);
+        setLocationRelativeTo(ExtensionLifecycle.suiteFrame());
     }
 
     // ---------------------------------------------------------------------
@@ -242,7 +243,7 @@ public final class ResultDialog extends JDialog {
         btn.setEnabled(false);
         JDialog waiting = showProposedWaitingDialog();
 
-        Thread t = new Thread(() -> {
+        ExtensionLifecycle.startTracked(api, () -> {
             try {
                 AIResponse resp = provider.send(req);
                 List<TestBlock> tests = parseTestBlocks(resp.content());
@@ -268,8 +269,6 @@ public final class ResultDialog extends JDialog {
                 });
             }
         }, "xagentai-send-proposed");
-        t.setDaemon(true);
-        t.start();
     }
 
     private void handleParsedTests(List<TestBlock> tests, String rawAiOutput, JButton btn) {
@@ -330,6 +329,7 @@ public final class ResultDialog extends JDialog {
         JDialog d = new JDialog(this, "XagentAI — generating tests", false);
         d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         d.setLayout(new BorderLayout(10, 10));
+        ExtensionLifecycle.trackWindow(d);
 
         JLabel label = new JLabel("Asking " + provider.displayName() + " to convert TESTS TO RUN into HTTP requests...  0s");
         JPanel center = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
@@ -441,7 +441,7 @@ public final class ResultDialog extends JDialog {
         btn.setEnabled(false);
         JDialog waiting = showProposedWaitingDialog();
 
-        Thread t = new Thread(() -> {
+        ExtensionLifecycle.startTracked(api, () -> {
             try {
                 AIResponse resp = provider.send(req);
                 SwingUtilities.invokeLater(() -> {
@@ -467,8 +467,6 @@ public final class ResultDialog extends JDialog {
                 });
             }
         }, "xagentai-intruder");
-        t.setDaemon(true);
-        t.start();
     }
 
     private void handleIntruderResponse(String aiOutput, JButton btn) {

@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] — 2026-11-12
+
+Hardening pass for BApp Store submission. All visible behaviour is unchanged;
+the plugin now meets PortSwigger's acceptance criteria 5, 6, 7 and 10.
+
+### Added
+
+- `ExtensionLifecycle` helper that tracks every background thread the
+  extension spawns and every top-level `Window` it opens.
+- `ExtensionUnloadingHandler` registered on `initialize()`. On unload the
+  handler interrupts all tracked threads and disposes all tracked windows
+  (acceptance criterion 6).
+- Uncaught exceptions in background threads are now written to Burp's
+  extension error stream with their stack trace (acceptance criterion 5).
+
+### Changed
+
+- All HTTP traffic to AI providers (Claude, OpenAI, NVIDIA, LM Studio,
+  Ollama, llama.cpp) now goes through `burp.api.montoya.http.Http.sendRequest()`
+  instead of the JDK `HttpClient`. The calls honour Burp's upstream proxy,
+  TLS and session-handling settings (acceptance criterion 7).
+- All plugin-owned dialogs and popups (result dialog, waiting dialogs,
+  `JOptionPane` errors) are now parented to `SwingUtils.suiteFrame()`
+  rather than to `null`, so they appear on the same monitor as Burp
+  (acceptance criterion 10).
+
+### Removed
+
+- `java.net.http.HttpClient` and all `java.net.*` imports from the
+  extension — the plugin no longer touches the JDK HTTP stack.
+
+[0.2.0]: https://github.com/marcodemm/artificial-intelligence-for-burp-suite-xagentai-net/releases/tag/v0.2.0
+
 ## [0.1.0] — 2026-11-11
 
 Initial public release.

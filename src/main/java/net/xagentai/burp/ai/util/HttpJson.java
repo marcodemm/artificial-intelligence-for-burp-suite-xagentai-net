@@ -1,65 +1,98 @@
 package net.xagentai.burp.ai.util;
 
+import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.http.RequestOptions;
+import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
+
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Map;
 
 /**
- * Minimal JSON-over-HTTP helper used by cloud providers (Claude, OpenAI-compat
- * local servers). Built on the JDK's built-in {@link HttpClient} to avoid any
- * extra runtime dependency.
+ * Minimal JSON-over-HTTP helper routed through Burp's own HTTP stack
+ * ({@link burp.api.montoya.http.Http#sendRequest}). Going through Burp
+ * means outbound AI calls honour upstream proxy, TLS and session-handling
+ * rules configured in the user's Burp, as recommended by criterion #7 of
+ * the BApp Store acceptance criteria.
  */
 public final class HttpJson {
 
     private HttpJson() {}
 
-    public static String post(String url, Map<String, String> headers, String jsonBody, int timeoutSeconds)
-            throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(Math.max(5, timeoutSeconds)))
-                .build();
-        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(Math.max(5, timeoutSeconds)))
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+    public static String post(MontoyaApi api,
+                              String url,
+                              Map<String, String> headers,
+                              String jsonBody,
+                              int timeoutSeconds) throws IOException {
+
+        HttpRequest req = HttpRequest.httpRequestFromUrl(url)
+                .withMethod("POST")
+                .withBody(jsonBody);
 
         boolean hasContentType = false;
         if (headers != null) {
             for (Map.Entry<String, String> e : headers.entrySet()) {
-                if ("content-type".equalsIgnoreCase(e.getKey())) hasContentType = true;
-                b.header(e.getKey(), e.getValue());
+                if ("content-type".equalsIgnoreCase(e.getKey())) {
+                    hasContentType = true;
+                }
+                req = req.withUpdatedHeader(e.getKey(), e.getValue());
             }
         }
         if (!hasContentType) {
-            b.header("Content-Type", "application/json");
+            req = req.withUpdatedHeader("Content-Type", "application/json");
         }
 
-        HttpResponse<String> resp = client.send(b.build(), HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() / 100 != 2) {
-            throw new IOException("HTTP " + resp.statusCode() + " from " + url + " — " + truncate(resp.body(), 500));
+        RequestOptions opts = RequestOptions.requestOptions()
+                .withResponseTimeout(Math.max(5, timeoutSeconds) * 1000L);
+
+        HttpRequestResponse rr;
+        try {
+            rr = api.http().sendRequest(req, opts);
+        } catch (RuntimeException ex) {
+            // Burp wraps low-level network issues as RuntimeException.
+            throw new IOException("Request to " + url + " failed: " + ex.getMessage(), ex);
         }
-        return resp.body();
+        if (!rr.hasResponse()) {
+            throw new IOException("No response from " + url);
+        }
+        int status = rr.response().statusCode();
+        String body = rr.response().bodyToString();
+        if (status / 100 != 2) {
+            throw new IOException("HTTP " + status + " from " + url + " — " + truncate(body, 500));
+        }
+        return body;
     }
 
-    public static String get(String url, Map<String, String> headers, int timeoutSeconds)
-            throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(Math.max(5, timeoutSeconds)))
-                .build();
-        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(Math.max(5, timeoutSeconds)))
-                .GET();
-        if (headers != null) headers.forEach(b::header);
+    public static String get(MontoyaApi api,
+                             String url,
+                             Map<String, String> headers,
+                             int timeoutSeconds) throws IOException {
 
-        HttpResponse<String> resp = client.send(b.build(), HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() / 100 != 2) {
-            throw new IOException("HTTP " + resp.statusCode() + " from " + url + " — " + truncate(resp.body(), 500));
+        HttpRequest req = HttpRequest.httpRequestFromUrl(url);
+        if (headers != null) {
+            for (Map.Entry<String, String> e : headers.entrySet()) {
+                req = req.withUpdatedHeader(e.getKey(), e.getValue());
+            }
         }
-        return resp.body();
+
+        RequestOptions opts = RequestOptions.requestOptions()
+                .withResponseTimeout(Math.max(5, timeoutSeconds) * 1000L);
+
+        HttpRequestResponse rr;
+        try {
+            rr = api.http().sendRequest(req, opts);
+        } catch (RuntimeException ex) {
+            throw new IOException("Request to " + url + " failed: " + ex.getMessage(), ex);
+        }
+        if (!rr.hasResponse()) {
+            throw new IOException("No response from " + url);
+        }
+        int status = rr.response().statusCode();
+        String body = rr.response().bodyToString();
+        if (status / 100 != 2) {
+            throw new IOException("HTTP " + status + " from " + url + " — " + truncate(body, 500));
+        }
+        return body;
     }
 
     private static String truncate(String s, int max) {
