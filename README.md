@@ -24,8 +24,7 @@
 7. [Use](#use)
 8. [Privacy &amp; PII sanitization](#privacy--pii-sanitization)
 9. [Build from source](#build-from-source)
-10. [Roadmap](#roadmap)
-11. [License](#license)
+10. [License](#license)
 
 ---
 
@@ -287,29 +286,6 @@ to that folder on every successful build.
 ```
 
 Writes `dist/xagentai-burp-ai-X.Y.Z.jar` with a clean, versioned name.
-
----
-
-## Roadmap
-
-### v0.2
-
-- Google Gemini provider (native API, not OpenAI-compatible).
-- Pre-defined prompt library (SQLi, XSS, IDOR, SSRF, auth-bypass, business
-  logic) selectable from the right-click menu.
-- Analysis history tab with per-request re-open.
-- Markdown / HTML / PDF export of an analysis thread.
-- Multi-turn (continued conversation with prior context).
-
-### v1.0+
-
-- Deeper Scanner integration (register custom scan checks derived from
-  AI-proposed tests).
-- Per-request token/cost tracking with a configurable budget cap.
-- Cache of identical analyses (skip the API call when the same request has
-  already been analysed).
-- Side-by-side comparison of multiple providers' answers on the same
-  request.
 
 ---
 
