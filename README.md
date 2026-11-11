@@ -163,8 +163,15 @@ Burp's native WebSocket Repeater for frame-level replay.
 2. In Burp: **Extensions → Installed → Add** → Extension type: `Java` →
    select the `.jar`.
 3. Open the **XagentAI** top-bar tab → **Settings** → configure your active
-   provider (API key / endpoint / model) → **Save settings**.
-4. Click **Test connection** on your active provider's sub-tab to verify.
+   provider (API key / endpoint / model).
+4. Click **Save settings** (bottom-right of the Settings panel).
+   > **Important.** Every change in Settings — API key, **Model from the
+   > combo**, temperature, timeout, Sanitize mode, active provider — is only
+   > persisted when you click **Save settings**. Changing the Model combo
+   > and forgetting to Save is the most common foot-gun: the next analysis
+   > will silently keep using the previously saved model. The green
+   > `Settings saved.` label at the bottom-right confirms it took effect.
+5. Click **Test connection** on your active provider's sub-tab to verify.
 
 ### From the BApp Store
 
