@@ -1,11 +1,13 @@
 package net.xagentai.burp.ai.util;
 
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.RequestOptions;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -25,9 +27,14 @@ public final class HttpJson {
                               String jsonBody,
                               int timeoutSeconds) throws IOException {
 
+        // Explicit UTF-8 → ByteArray avoids any ambiguity about what
+        // charset Montoya's withBody(String) overload uses to encode the
+        // JSON body. Burp sees exactly the bytes we hand it.
+        byte[] bodyBytes = jsonBody.getBytes(StandardCharsets.UTF_8);
+
         HttpRequest req = HttpRequest.httpRequestFromUrl(url)
                 .withMethod("POST")
-                .withBody(jsonBody);
+                .withBody(ByteArray.byteArray(bodyBytes));
 
         boolean hasContentType = false;
         if (headers != null) {
@@ -41,6 +48,30 @@ public final class HttpJson {
         if (!hasContentType) {
             req = setHeader(req, "Content-Type", "application/json");
         }
+        // Content-Length is required for POST; make sure it matches the
+        // actual UTF-8 byte count we're shipping (Burp may add it from the
+        // String length, which is wrong for multi-byte UTF-8 chars like '—').
+        req = setHeader(req, "Content-Length", Integer.toString(bodyBytes.length));
+
+        // Diagnostic log — remove once the HTTP 400 "control character"
+        // issue is fully nailed down.
+        api.logging().logToOutput("[HttpJson.post] url=" + url
+                + " jsonLen(chars)=" + jsonBody.length()
+                + " bodyLen(utf8-bytes)=" + bodyBytes.length);
+        int center = Math.min(239, jsonBody.length());
+        int lo = Math.max(0, center - 20);
+        int hi = Math.min(jsonBody.length(), center + 20);
+        StringBuilder hex = new StringBuilder();
+        StringBuilder txt = new StringBuilder();
+        for (int i = lo; i < hi; i++) {
+            char c = jsonBody.charAt(i);
+            hex.append(String.format("%04X ", (int) c));
+            txt.append((c < 0x20 || c > 0x7E) ? '.' : c);
+        }
+        api.logging().logToOutput("[HttpJson.post] chars[" + lo + "-" + hi
+                + "] hex=" + hex.toString().trim());
+        api.logging().logToOutput("[HttpJson.post] chars[" + lo + "-" + hi
+                + "] txt=" + txt);
 
         RequestOptions opts = RequestOptions.requestOptions()
                 .withResponseTimeout(Math.max(5, timeoutSeconds) * 1000L);
