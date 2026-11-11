@@ -35,11 +35,11 @@ public final class HttpJson {
                 if ("content-type".equalsIgnoreCase(e.getKey())) {
                     hasContentType = true;
                 }
-                req = req.withUpdatedHeader(e.getKey(), e.getValue());
+                req = setHeader(req, e.getKey(), e.getValue());
             }
         }
         if (!hasContentType) {
-            req = req.withUpdatedHeader("Content-Type", "application/json");
+            req = setHeader(req, "Content-Type", "application/json");
         }
 
         RequestOptions opts = RequestOptions.requestOptions()
@@ -71,7 +71,7 @@ public final class HttpJson {
         HttpRequest req = HttpRequest.httpRequestFromUrl(url);
         if (headers != null) {
             for (Map.Entry<String, String> e : headers.entrySet()) {
-                req = req.withUpdatedHeader(e.getKey(), e.getValue());
+                req = setHeader(req, e.getKey(), e.getValue());
             }
         }
 
@@ -98,5 +98,18 @@ public final class HttpJson {
     private static String truncate(String s, int max) {
         if (s == null) return "";
         return s.length() > max ? s.substring(0, max) + "..." : s;
+    }
+
+    /**
+     * Upsert a header: {@code withUpdatedHeader} silently no-ops when the
+     * header is absent, so we add it in that case and update it otherwise.
+     * This is the root cause of the "x-api-key header is required" bug we
+     * hit after migrating off the JDK HttpClient.
+     */
+    private static HttpRequest setHeader(HttpRequest req, String name, String value) {
+        if (req.hasHeader(name)) {
+            return req.withUpdatedHeader(name, value);
+        }
+        return req.withAddedHeader(name, value);
     }
 }
