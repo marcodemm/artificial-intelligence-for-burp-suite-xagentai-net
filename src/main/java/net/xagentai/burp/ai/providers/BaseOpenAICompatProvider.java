@@ -167,6 +167,7 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
         try {
             JsonObject root = JsonParser.parseString(body).getAsJsonObject();
             String content = "";
+            String fallbackSource = null;
             if (root.has("choices") && root.get("choices").isJsonArray()) {
                 JsonArray choices = root.getAsJsonArray("choices");
                 if (!choices.isEmpty()) {
@@ -175,6 +176,40 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
                         JsonObject m = first.getAsJsonObject("message");
                         if (m.has("content") && !m.get("content").isJsonNull()) {
                             content = m.get("content").getAsString();
+                        }
+                        // Reasoning-model fallback: NVIDIA Nemotron "super",
+                        // some OpenAI o-series responses and other
+                        // chain-of-thought models sometimes emit nothing in
+                        // `content` and put the actual answer in
+                        // `reasoning_content` or `reasoning`. Treat those as
+                        // the real content when the standard field is empty.
+                        if (content.isEmpty() && m.has("reasoning_content")
+                                && !m.get("reasoning_content").isJsonNull()) {
+                            content = m.get("reasoning_content").getAsString();
+                            fallbackSource = "reasoning_content";
+                        }
+                        if (content.isEmpty() && m.has("reasoning")
+                                && !m.get("reasoning").isJsonNull()
+                                && m.get("reasoning").isJsonPrimitive()) {
+                            content = m.get("reasoning").getAsString();
+                            fallbackSource = "reasoning";
+                        }
+                        if (content.isEmpty()) {
+                            // Log the shape so the operator can tell WHY it
+                            // was empty (budget exhausted on reasoning, API
+                            // returned a different envelope, etc.).
+                            StringBuilder keys = new StringBuilder();
+                            for (String k : m.keySet()) {
+                                if (keys.length() > 0) keys.append(',');
+                                keys.append(k);
+                            }
+                            log.logToOutput("[" + displayName() + "] empty content from provider — "
+                                    + "message object keys were: [" + keys + "] · raw body length "
+                                    + body.length() + " chars");
+                        } else if (fallbackSource != null) {
+                            log.logToOutput("[" + displayName() + "] message.content was empty; "
+                                    + "falling back to message." + fallbackSource + " ("
+                                    + content.length() + " chars)");
                         }
                     }
                 }
