@@ -16,7 +16,7 @@ public final class XagentConfig {
     private String claudeApiKey = "";
     private String claudeBaseUrl = "https://api.anthropic.com";
     private String claudeModel = "claude-haiku-5-5";
-    private int claudeMaxTokens = 4096;
+    private int claudeMaxTokens = 8192;
     private double claudeTemperature = 0.2d;
     private int claudeTimeoutSeconds = 60;
 
@@ -24,7 +24,7 @@ public final class XagentConfig {
     private String lmStudioBaseUrl = "http://localhost:1234/v1";
     /** Empty = auto-detect via GET /v1/models and use the loaded model. */
     private String lmStudioModel = "";
-    private int lmStudioMaxTokens = 4096;
+    private int lmStudioMaxTokens = 8192;
     private double lmStudioTemperature = 0.2d;
     // 10 minutes — local models can be very slow at prompt processing +
     // generation, especially large reasoning variants like Bughunter-v10.
@@ -34,7 +34,7 @@ public final class XagentConfig {
     private String openaiApiKey = "";
     private String openaiBaseUrl = "https://api.openai.com";
     private String openaiModel = "gpt-4o-mini";
-    private int openaiMaxTokens = 4096;
+    private int openaiMaxTokens = 8192;
     private double openaiTemperature = 0.2d;
     private int openaiTimeoutSeconds = 90;
 
@@ -42,7 +42,7 @@ public final class XagentConfig {
     private String nvidiaApiKey = "";
     private String nvidiaBaseUrl = "https://integrate.api.nvidia.com";
     private String nvidiaModel = "nvidia/nemotron-3.5-super-vl-120b-a12b";
-    private int nvidiaMaxTokens = 4096;
+    private int nvidiaMaxTokens = 8192;
     private double nvidiaTemperature = 0.2d;
     private int nvidiaTimeoutSeconds = 90;
 
@@ -50,14 +50,14 @@ public final class XagentConfig {
     private String ollamaBaseUrl = "http://localhost:11434";
     /** Empty = auto-detect via GET /v1/models. */
     private String ollamaModel = "";
-    private int ollamaMaxTokens = 4096;
+    private int ollamaMaxTokens = 8192;
     private double ollamaTemperature = 0.2d;
     private int ollamaTimeoutSeconds = 600;
 
     // --- llama.cpp (local, via llama-server) ------------------------------
     private String llamacppBaseUrl = "http://localhost:8080";
     private String llamacppModel = "";
-    private int llamacppMaxTokens = 4096;
+    private int llamacppMaxTokens = 8192;
     private double llamacppTemperature = 0.2d;
     private int llamacppTimeoutSeconds = 600;
 

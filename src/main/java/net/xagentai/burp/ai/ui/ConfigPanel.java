@@ -199,7 +199,7 @@ public final class ConfigPanel extends JPanel {
         });
         claudeModelCombo.setEditable(true);
         addRow(p, c, 2, "Model:", claudeModelCombo);
-        claudeMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
+        claudeMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(8192, 1, 1_000_000, 256));
         addRow(p, c, 3, "Max tokens:", claudeMaxTokensSpinner);
         claudeTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
         claudeTemperatureSpinner.setToolTipText("Ignored on Claude 5+ (Anthropic deprecated the 'temperature' parameter for the Claude 5 family).");
@@ -237,7 +237,7 @@ public final class ConfigPanel extends JPanel {
         modelRow.add(lmRefreshButton, BorderLayout.EAST);
         addRow(p, c, 1, "Model:", modelRow);
 
-        lmMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
+        lmMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(8192, 1, 1_000_000, 256));
         addRow(p, c, 2, "Max tokens:", lmMaxTokensSpinner);
         lmTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
         addRow(p, c, 3, "Temperature:", lmTemperatureSpinner);
@@ -264,7 +264,7 @@ public final class ConfigPanel extends JPanel {
         openaiApiKeyField = new JPasswordField(40);
         openaiBaseUrlField = new JTextField(40);
         openaiModelField = new JTextField(40);
-        openaiMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
+        openaiMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(8192, 1, 1_000_000, 256));
         openaiTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
         openaiTemperatureSpinner.setToolTipText("Ignored on GPT-5 / o1 / o3 / o4 reasoning models (OpenAI deprecated 'temperature' there).");
         openaiTimeoutSpinner = new JSpinner(new SpinnerNumberModel(90, 1, 3600, 10));
@@ -277,7 +277,7 @@ public final class ConfigPanel extends JPanel {
         nvidiaApiKeyField = new JPasswordField(40);
         nvidiaBaseUrlField = new JTextField(40);
         nvidiaModelField = new JTextField(40);
-        nvidiaMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
+        nvidiaMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(8192, 1, 1_000_000, 256));
         nvidiaTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
         nvidiaTimeoutSpinner = new JSpinner(new SpinnerNumberModel(90, 1, 3600, 10));
         return buildSimpleProviderPanel("nvidia", nvidiaApiKeyField, nvidiaBaseUrlField,
@@ -288,7 +288,7 @@ public final class ConfigPanel extends JPanel {
     private JPanel buildOllamaPanel() {
         ollamaBaseUrlField = new JTextField(40);
         ollamaModelField = new JTextField(40);
-        ollamaMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
+        ollamaMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(8192, 1, 1_000_000, 256));
         ollamaTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
         ollamaTimeoutSpinner = new JSpinner(new SpinnerNumberModel(600, 1, 3600, 10));
         return buildSimpleProviderPanel("ollama", null, ollamaBaseUrlField,
@@ -299,7 +299,7 @@ public final class ConfigPanel extends JPanel {
     private JPanel buildLlamacppPanel() {
         llamacppBaseUrlField = new JTextField(40);
         llamacppModelField = new JTextField(40);
-        llamacppMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
+        llamacppMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(8192, 1, 1_000_000, 256));
         llamacppTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
         llamacppTimeoutSpinner = new JSpinner(new SpinnerNumberModel(600, 1, 3600, 10));
         return buildSimpleProviderPanel("llamacpp", null, llamacppBaseUrlField,
