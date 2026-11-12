@@ -67,7 +67,7 @@ public final class HttpJson {
             throw new IOException("No response from " + url);
         }
         int status = rr.response().statusCode();
-        String body = rr.response().bodyToString();
+        String body = utf8Body(rr);
         if (status / 100 != 2) {
             throw new IOException("HTTP " + status + " from " + url + " — " + truncate(body, 500));
         }
@@ -99,11 +99,24 @@ public final class HttpJson {
             throw new IOException("No response from " + url);
         }
         int status = rr.response().statusCode();
-        String body = rr.response().bodyToString();
+        String body = utf8Body(rr);
         if (status / 100 != 2) {
             throw new IOException("HTTP " + status + " from " + url + " — " + truncate(body, 500));
         }
         return body;
+    }
+
+    /**
+     * Decode the response body explicitly as UTF-8. Montoya's
+     * {@code response().bodyToString()} relies on the Content-Type charset
+     * heuristic and falls back to ISO-8859-1 when the server omits it,
+     * which produced mojibake ('â', 'â€', 'â€™') for providers like
+     * NVIDIA that don't declare the charset in Content-Type. Every
+     * AI provider we talk to returns JSON, which is UTF-8 per RFC 8259.
+     */
+    private static String utf8Body(HttpRequestResponse rr) {
+        burp.api.montoya.core.ByteArray body = rr.response().body();
+        return new String(body.getBytes(), StandardCharsets.UTF_8);
     }
 
     private static String truncate(String s, int max) {
