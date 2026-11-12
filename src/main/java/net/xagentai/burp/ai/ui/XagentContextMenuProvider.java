@@ -23,6 +23,7 @@ import net.xagentai.burp.ai.providers.ProviderRegistry;
 import net.xagentai.burp.ai.util.HttpRequestSerializer;
 import net.xagentai.burp.ai.util.Sanitizer;
 
+import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
@@ -42,6 +43,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Registers "Analyze with AI" (and "Analyze issue with AI" for scan issues)
@@ -240,18 +243,30 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
         int maxTokens = maxTokensFor(provider.id());
         AIRequest request = new AIRequest(systemPrompt, userMessage, maxTokens, temperature);
 
-        JDialog waiting = showWaitingDialog(provider);
+        // Cancel token the waiting dialog flips to true when the operator
+        // closes it with the X or the Cancel button. We cannot abort the
+        // in-flight HTTP call (Montoya sendRequest is synchronous), but we
+        // can discard its result on return so the operator sees no
+        // leftover ResultDialog.
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        JDialog waiting = showWaitingDialog(provider, cancelled, worker);
         log.logToOutput("[" + context + "] Sending to " + provider.displayName()
                 + " (sanitization=" + config.sanitizationMode()
                 + ", bytes=" + userMessage.length() + ")");
 
-        ExtensionLifecycle.startTracked(api, () -> {
+        Thread t = ExtensionLifecycle.startTracked(api, () -> {
             long start = System.nanoTime();
             try {
                 AIResponse response = provider.send(request);
                 long ms = (System.nanoTime() - start) / 1_000_000L;
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        log.logToOutput("[" + context + "] " + provider.displayName()
+                                + " returned in " + ms + " ms — discarded, operator cancelled.");
+                        return;
+                    }
                     log.logToOutput("[" + context + "] " + provider.displayName()
                             + " responded in " + ms + " ms"
                             + " (in=" + response.inputTokens() + " out=" + response.outputTokens() + ")");
@@ -263,6 +278,12 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
                 long ms = (System.nanoTime() - start) / 1_000_000L;
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        log.logToOutput("[" + context + "] cancelled; "
+                                + provider.displayName() + " error suppressed after "
+                                + ms + " ms: " + ex.getMessage());
+                        return;
+                    }
                     log.logToError("[" + context + "] " + provider.displayName()
                             + " failed in " + ms + " ms: " + ex.getMessage());
                     JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
@@ -272,6 +293,10 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
             } catch (RuntimeException ex) {
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        log.logToOutput("[" + context + "] cancelled; unexpected error suppressed: " + ex);
+                        return;
+                    }
                     log.logToError("[" + context + "] unexpected error: " + ex);
                     JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
                             "Unexpected error:\n\n" + ex.getMessage(),
@@ -279,9 +304,12 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
                 });
             }
         }, "xagentai-analyze");
+        worker.set(t);
     }
 
-    private JDialog showWaitingDialog(AIProvider provider) {
+    private JDialog showWaitingDialog(AIProvider provider,
+                                      AtomicBoolean cancelled,
+                                      AtomicReference<Thread> worker) {
         JDialog d = new JDialog(ExtensionLifecycle.suiteFrame(),
                 "XagentAI — asking " + provider.displayName(), false);
         d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -295,8 +323,22 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
 
         JProgressBar bar = new JProgressBar();
         bar.setIndeterminate(true);
-        JPanel south = new JPanel(new BorderLayout());
+        JPanel south = new JPanel(new BorderLayout(6, 6));
         south.add(bar, BorderLayout.CENTER);
+
+        JButton cancelBtn = new JButton("Cancel");
+        cancelBtn.setToolTipText("Close this dialog and discard the AI's answer when it arrives. "
+                + "Note: the HTTP request already in flight cannot be aborted mid-way; its result "
+                + "will simply be ignored.");
+        Runnable doCancel = () -> {
+            if (cancelled.compareAndSet(false, true)) {
+                Thread w = worker.get();
+                if (w != null) w.interrupt();
+            }
+            d.dispose();
+        };
+        cancelBtn.addActionListener(e -> doCancel.run());
+        south.add(cancelBtn, BorderLayout.EAST);
         d.add(south, BorderLayout.SOUTH);
 
         // Live "elapsed seconds" counter — useful feedback for slow local models.
@@ -308,10 +350,14 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
         ticker.setRepeats(true);
         ticker.start();
         d.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent e) {
+                // Treat the X in the title bar as Cancel.
+                doCancel.run();
+            }
             @Override public void windowClosed(WindowEvent e) { ticker.stop(); }
         });
 
-        d.setPreferredSize(new Dimension(420, 110));
+        d.setPreferredSize(new Dimension(460, 130));
         d.pack();
         d.setLocationRelativeTo(ExtensionLifecycle.suiteFrame());
         d.setVisible(true);

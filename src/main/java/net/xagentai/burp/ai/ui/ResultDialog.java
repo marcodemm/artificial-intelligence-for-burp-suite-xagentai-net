@@ -43,6 +43,8 @@ import java.awt.event.WindowEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -259,19 +261,31 @@ public final class ResultDialog extends JDialog {
         AIRequest req = new AIRequest(CONVERT_SYSTEM_PROMPT, userMessage, maxTokens, 0.1d);
 
         btn.setEnabled(false);
-        JDialog waiting = showProposedWaitingDialog();
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        JDialog waiting = showProposedWaitingDialog(btn, cancelled, worker);
 
-        ExtensionLifecycle.startTracked(api, () -> {
+        Thread t = ExtensionLifecycle.startTracked(api, () -> {
             try {
                 AIResponse resp = provider.send(req);
                 List<TestBlock> tests = parseTestBlocks(resp.content());
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        api.logging().logToOutput("[SEND TO REPEATER] cancelled by operator; "
+                                + provider.displayName() + " response discarded.");
+                        return;
+                    }
                     handleParsedTests(tests, resp.content(), btn);
                 });
             } catch (AIException ex) {
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        api.logging().logToOutput("[SEND TO REPEATER] cancelled; error suppressed: "
+                                + ex.getMessage());
+                        return;
+                    }
                     btn.setEnabled(true);
                     JOptionPane.showMessageDialog(ResultDialog.this,
                             provider.displayName() + " error:\n\n" + ex.getMessage(),
@@ -280,6 +294,10 @@ public final class ResultDialog extends JDialog {
             } catch (RuntimeException ex) {
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        api.logging().logToOutput("[SEND TO REPEATER] cancelled; unexpected error suppressed: " + ex);
+                        return;
+                    }
                     btn.setEnabled(true);
                     JOptionPane.showMessageDialog(ResultDialog.this,
                             "Unexpected error:\n\n" + ex.getMessage(),
@@ -287,6 +305,7 @@ public final class ResultDialog extends JDialog {
                 });
             }
         }, "xagentai-send-proposed");
+        worker.set(t);
     }
 
     private void handleParsedTests(List<TestBlock> tests, String rawAiOutput, JButton btn) {
@@ -365,7 +384,9 @@ public final class ResultDialog extends JDialog {
         }
     }
 
-    private JDialog showProposedWaitingDialog() {
+    private JDialog showProposedWaitingDialog(JButton callerBtn,
+                                              AtomicBoolean cancelled,
+                                              AtomicReference<Thread> worker) {
         JDialog d = new JDialog(this, "XagentAI — generating tests", false);
         d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         d.setLayout(new BorderLayout(10, 10));
@@ -378,8 +399,23 @@ public final class ResultDialog extends JDialog {
 
         JProgressBar bar = new JProgressBar();
         bar.setIndeterminate(true);
-        JPanel south = new JPanel(new BorderLayout());
+        JPanel south = new JPanel(new BorderLayout(6, 6));
         south.add(bar, BorderLayout.CENTER);
+
+        JButton cancelBtn = new JButton("Cancel");
+        cancelBtn.setToolTipText("Close this dialog and discard the AI's answer when it arrives. "
+                + "Note: the HTTP request already in flight cannot be aborted mid-way; its result "
+                + "will simply be ignored.");
+        Runnable doCancel = () -> {
+            if (cancelled.compareAndSet(false, true)) {
+                Thread w = worker.get();
+                if (w != null) w.interrupt();
+                if (callerBtn != null) callerBtn.setEnabled(true);
+            }
+            d.dispose();
+        };
+        cancelBtn.addActionListener(e -> doCancel.run());
+        south.add(cancelBtn, BorderLayout.EAST);
         d.add(south, BorderLayout.SOUTH);
 
         long startMs = System.currentTimeMillis();
@@ -389,10 +425,11 @@ public final class ResultDialog extends JDialog {
         });
         ticker.start();
         d.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent e) { doCancel.run(); }
             @Override public void windowClosed(WindowEvent e) { ticker.stop(); }
         });
 
-        d.setPreferredSize(new Dimension(520, 120));
+        d.setPreferredSize(new Dimension(560, 140));
         d.pack();
         d.setLocationRelativeTo(this);
         d.setVisible(true);
@@ -479,19 +516,31 @@ public final class ResultDialog extends JDialog {
         AIRequest req = new AIRequest(INTRUDER_SYSTEM_PROMPT, userMessage, maxTokens, 0.1d);
 
         btn.setEnabled(false);
-        JDialog waiting = showProposedWaitingDialog();
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        JDialog waiting = showProposedWaitingDialog(btn, cancelled, worker);
 
-        ExtensionLifecycle.startTracked(api, () -> {
+        Thread t = ExtensionLifecycle.startTracked(api, () -> {
             try {
                 AIResponse resp = provider.send(req);
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        api.logging().logToOutput("[SEND TO INTRUDER] cancelled by operator; "
+                                + provider.displayName() + " response discarded.");
+                        return;
+                    }
                     btn.setEnabled(true);
                     handleIntruderResponse(resp.content(), btn);
                 });
             } catch (AIException ex) {
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        api.logging().logToOutput("[SEND TO INTRUDER] cancelled; error suppressed: "
+                                + ex.getMessage());
+                        return;
+                    }
                     btn.setEnabled(true);
                     JOptionPane.showMessageDialog(ResultDialog.this,
                             provider.displayName() + " error:\n\n" + ex.getMessage(),
@@ -500,6 +549,10 @@ public final class ResultDialog extends JDialog {
             } catch (RuntimeException ex) {
                 SwingUtilities.invokeLater(() -> {
                     waiting.dispose();
+                    if (cancelled.get()) {
+                        api.logging().logToOutput("[SEND TO INTRUDER] cancelled; unexpected error suppressed: " + ex);
+                        return;
+                    }
                     btn.setEnabled(true);
                     JOptionPane.showMessageDialog(ResultDialog.this,
                             "Unexpected error:\n\n" + ex.getMessage(),
@@ -507,6 +560,7 @@ public final class ResultDialog extends JDialog {
                 });
             }
         }, "xagentai-intruder");
+        worker.set(t);
     }
 
     private void handleIntruderResponse(String aiOutput, JButton btn) {
