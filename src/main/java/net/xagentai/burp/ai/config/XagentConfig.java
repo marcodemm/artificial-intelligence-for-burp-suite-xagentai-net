@@ -40,7 +40,7 @@ public final class XagentConfig {
     // --- NVIDIA NIM / API Catalog ----------------------------------------
     private String nvidiaApiKey = "";
     private String nvidiaBaseUrl = "https://integrate.api.nvidia.com";
-    private String nvidiaModel = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
+    private String nvidiaModel = "nvidia/nemotron-3.5-super-vl-120b-a12b";
     private int nvidiaMaxTokens = 4096;
     private double nvidiaTemperature = 0.2d;
     private int nvidiaTimeoutSeconds = 90;

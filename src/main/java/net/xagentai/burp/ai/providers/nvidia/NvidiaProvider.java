@@ -32,5 +32,5 @@ public final class NvidiaProvider extends BaseOpenAICompatProvider {
     @Override protected int maxTokens()    { return config.nvidiaMaxTokens(); }
     @Override protected double temperature() { return config.nvidiaTemperature(); }
     @Override protected int timeoutSeconds() { return config.nvidiaTimeoutSeconds(); }
-    @Override protected String defaultModel() { return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"; }
+    @Override protected String defaultModel() { return "nvidia/nemotron-3.5-super-vl-120b-a12b"; }
 }
