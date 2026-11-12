@@ -132,10 +132,30 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
         return items;
     }
 
+    /** Hard cap on multi-selection. Beyond two requests the combined prompt
+     *  blows past the context window of most providers and the analysis
+     *  gets truncated silently; we rather surface this to the operator. */
+    private static final int MAX_MULTI_SELECTION = 2;
+
     private void onAnalyzeHttp(ContextMenuEvent event) {
         List<HttpRequestResponse> selection = resolveHttpSelection(event);
         if (selection.isEmpty()) {
             showWarn("No HTTP request/response selected.");
+            return;
+        }
+        if (selection.size() > MAX_MULTI_SELECTION) {
+            JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
+                    "You selected " + selection.size() + " HTTP requests.\n\n"
+                  + "XagentAI only analyses up to " + MAX_MULTI_SELECTION
+                  + " requests together, so the operator can get a proper "
+                  + "cross-request contrast without overflowing the context "
+                  + "window of the active AI provider.\n\n"
+                  + "Please select at most " + MAX_MULTI_SELECTION
+                  + " requests, or just 1 for a single-request analysis.",
+                    "XagentAI — too many requests selected",
+                    JOptionPane.WARNING_MESSAGE);
+            log.logToOutput("[PROXY/HTTP] refused: " + selection.size()
+                    + " requests selected, limit is " + MAX_MULTI_SELECTION);
             return;
         }
         AIProvider provider = providers.active();
