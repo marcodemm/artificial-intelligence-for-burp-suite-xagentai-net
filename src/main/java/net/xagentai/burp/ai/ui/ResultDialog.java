@@ -359,7 +359,7 @@ public final class ResultDialog extends JDialog {
         return d;
     }
 
-    private static List<TestBlock> parseTestBlocks(String text) {
+    static List<TestBlock> parseTestBlocks(String text) {
         List<TestBlock> out = new ArrayList<>();
         if (text == null || text.isBlank()) return out;
         Matcher m = TEST_BLOCK.matcher(text);
@@ -407,7 +407,7 @@ public final class ResultDialog extends JDialog {
         return headersCrlf + "\r\n\r\n" + bodyCrlf;
     }
 
-    private static final class TestBlock {
+    static final class TestBlock {
         final String name;
         final String body;
         TestBlock(String name, String body) {
@@ -487,10 +487,15 @@ public final class ResultDialog extends JDialog {
         String wireWithMarkers = normalizeHttpWireFormat(reqM.group(1));
         ParsedWire parsed = extractRangesFromMarkers(wireWithMarkers);
 
+        List<Range> ranges = new ArrayList<>();
+        for (int[] p : parsed.offsets) {
+            ranges.add(Range.range(p[0], p[1]));
+        }
+
         HttpService svc = originalRequest.httpService();
         try {
             ByteArray content = ByteArray.byteArray(parsed.contentBytes);
-            HttpRequestTemplate template = HttpRequestTemplate.httpRequestTemplate(content, parsed.ranges);
+            HttpRequestTemplate template = HttpRequestTemplate.httpRequestTemplate(content, ranges);
             api.intruder().sendToIntruder(svc, template, "XagentAI");
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
@@ -511,22 +516,28 @@ public final class ResultDialog extends JDialog {
             } catch (Exception ignored) { }
         }
 
-        api.logging().logToOutput("[INTRUDER] opened with " + parsed.ranges.size()
+        api.logging().logToOutput("[INTRUDER] opened with " + parsed.offsets.size()
                 + " position(s); " + payloadsCopied + " payload(s) copied to clipboard.");
         flashButton(btn, "Opened — payloads copied!", "Send to Intruder");
 
         JOptionPane.showMessageDialog(this,
-                "Intruder opened with " + parsed.ranges.size() + " §-marked position(s).\n\n"
+                "Intruder opened with " + parsed.offsets.size() + " §-marked position(s).\n\n"
               + payloadsCopied + " payload(s) copied to the clipboard.\n"
               + "Switch to Intruder → Payloads tab → Paste (or Load from clipboard).",
                 "XagentAI — Intruder ready", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    /** Walk the wire format, strip '§' markers and record each pair as a byte Range. */
+    /**
+     * Walk the wire format, strip '§' markers and record each pair as a
+     * byte-offset [start, end] couple. The caller (Intruder dispatcher)
+     * turns the offsets into Montoya {@link Range} objects; keeping the
+     * util layer free of {@code Range.range()} lets us unit-test it
+     * outside Burp (the Montoya factory locator is null off-runtime).
+     */
     static ParsedWire extractRangesFromMarkers(String wireWithMarkers) {
         if (wireWithMarkers == null) wireWithMarkers = "";
         StringBuilder clean = new StringBuilder();
-        List<Range> ranges = new ArrayList<>();
+        List<int[]> offsets = new ArrayList<>();
         Integer openByteOffset = null;
         for (int i = 0; i < wireWithMarkers.length(); i++) {
             char ch = wireWithMarkers.charAt(i);
@@ -535,7 +546,7 @@ public final class ResultDialog extends JDialog {
                 if (openByteOffset == null) {
                     openByteOffset = bytePos;
                 } else {
-                    ranges.add(Range.range(openByteOffset, bytePos));
+                    offsets.add(new int[]{openByteOffset, bytePos});
                     openByteOffset = null;
                 }
             } else {
@@ -544,13 +555,13 @@ public final class ResultDialog extends JDialog {
         }
         // If a marker was opened but never closed, drop it silently.
         byte[] cleanBytes = clean.toString().getBytes(StandardCharsets.UTF_8);
-        return new ParsedWire(cleanBytes, ranges);
+        return new ParsedWire(cleanBytes, offsets);
     }
 
     static final class ParsedWire {
         final byte[] contentBytes;
-        final List<Range> ranges;
-        ParsedWire(byte[] c, List<Range> r) { contentBytes = c; ranges = r; }
+        final List<int[]> offsets;
+        ParsedWire(byte[] c, List<int[]> o) { contentBytes = c; offsets = o; }
     }
 
     // ---------------------------------------------------------------------
