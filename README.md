@@ -98,7 +98,7 @@ beyond the AI endpoint the operator configured.
 |---------------|-------|--------------------------------------------|-----------------------------------|
 | **Claude**    | Cloud | `https://api.anthropic.com`                | `claude-haiku-5-5`                |
 | **OpenAI**    | Cloud | `https://api.openai.com`                   | `gpt-4o-mini`                     |
-| **NVIDIA**    | Cloud | `https://integrate.api.nvidia.com`         | `meta/llama-3.3-70b-instruct`     |
+| **NVIDIA**    | Cloud | `https://integrate.api.nvidia.com`         | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` |
 | **LM Studio** | Local | `http://localhost:1234/v1`                 | auto-detect via `/v1/models`      |
 | **Ollama**    | Local | `http://localhost:11434`                   | auto-detect via `/v1/models`      |
 | **llama.cpp** | Local | `http://localhost:8080` (`llama-server`)   | whatever `llama-server` loaded    |

@@ -282,7 +282,7 @@ public final class ConfigPanel extends JPanel {
         nvidiaTimeoutSpinner = new JSpinner(new SpinnerNumberModel(90, 1, 3600, 10));
         return buildSimpleProviderPanel("nvidia", nvidiaApiKeyField, nvidiaBaseUrlField,
                 nvidiaModelField, nvidiaMaxTokensSpinner, nvidiaTemperatureSpinner,
-                nvidiaTimeoutSpinner, "e.g. meta/llama-3.3-70b-instruct, mistralai/mixtral-8x22b-instruct-v0.1");
+                nvidiaTimeoutSpinner, "e.g. nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, meta/llama-4-scout-17b-16e-instruct");
     }
 
     private JPanel buildOllamaPanel() {
