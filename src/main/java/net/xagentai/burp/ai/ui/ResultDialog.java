@@ -63,7 +63,9 @@ public final class ResultDialog extends JDialog {
             "You previously analyzed an HTTP request/response and suggested TESTS TO RUN.\n"
             + "Now convert each test into a complete HTTP request in wire format, ready to\n"
             + "send with Burp Repeater.\n\n"
-            + "Output the tests as a list using EXACTLY this format for each (one per block):\n\n"
+            + "MANDATORY OUTPUT CONTRACT. Your entire response MUST be ONLY a sequence of\n"
+            + "blocks that match this shape, with the === TEST: and === END TEST === markers\n"
+            + "written VERBATIM (three equals signs, one space, the word TEST, a colon):\n\n"
             + "=== TEST: <short descriptive name, max 40 chars, no colons> ===\n"
             + "<METHOD> <path-with-query> HTTP/1.1\n"
             + "Host: <host>\n"
@@ -71,12 +73,28 @@ public final class ResultDialog extends JDialog {
             + "\n"
             + "<body if any, otherwise leave this line empty>\n"
             + "=== END TEST ===\n\n"
+            + "WORKED EXAMPLE (emit output that looks EXACTLY like this — no Markdown\n"
+            + "fences, no prose, no numbering around the blocks):\n\n"
+            + "=== TEST: Reflected XSS in q parameter ===\n"
+            + "GET /search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E HTTP/1.1\n"
+            + "Host: example.com\n"
+            + "User-Agent: Mozilla/5.0\n"
+            + "Accept: */*\n"
+            + "\n"
+            + "=== END TEST ===\n"
+            + "=== TEST: Auth bypass via X-Forwarded-For ===\n"
+            + "GET /admin HTTP/1.1\n"
+            + "Host: example.com\n"
+            + "X-Forwarded-For: 127.0.0.1\n"
+            + "\n"
+            + "=== END TEST ===\n\n"
             + "Rules:\n"
             + "- Base each test on the ORIGINAL request. Keep its host, cookies and auth\n"
             + "  headers UNLESS the test specifically needs to modify them.\n"
             + "- Produce ONE concrete request per test. If a test suggests several payloads,\n"
             + "  emit ONE block per payload with a numbered descriptive name.\n"
-            + "- Do NOT emit prose, Markdown or any commentary outside the === TEST === blocks.\n"
+            + "- Do NOT emit prose, Markdown fences (```), bullet lists, numbered sections,\n"
+            + "  headings or ANY commentary outside the === TEST === blocks.\n"
             + "- Use HTTP/1.1. There MUST be a blank line between the header block and the\n"
             + "  body (even when there is no body). This is required by the HTTP spec;\n"
             + "  without it the request will time out at the server.\n"
@@ -274,24 +292,46 @@ public final class ResultDialog extends JDialog {
     private void handleParsedTests(List<TestBlock> tests, String rawAiOutput, JButton btn) {
         btn.setEnabled(true);
         if (tests.isEmpty()) {
-            // Fallback: no TESTS TO RUN parsed → send the ORIGINAL request to
-            // a single Repeater tab, and copy the raw AI output to the
+            // Fallback: no TESTS TO RUN parsed → send the ORIGINAL request
+            // to a single Repeater tab, and copy the raw AI output to the
             // clipboard so the operator can inspect what the model actually
-            // produced.
+            // produced. Be honest about the clipboard outcome: some models
+            // (e.g. small local ones) return an empty response and there
+            // was nothing to copy.
             try {
                 api.repeater().sendToRepeater(originalRequest, "XagentAI");
                 flashButton(btn, "Original sent (no tests)", "Send to Repeater");
             } catch (Exception ex) {
                 flashButton(btn, "Send failed", "Send to Repeater");
             }
-            try {
-                Toolkit.getDefaultToolkit().getSystemClipboard()
-                        .setContents(new StringSelection(rawAiOutput), null);
-            } catch (Exception ignored) { }
+
+            String clipboardLine;
+            if (rawAiOutput == null || rawAiOutput.isEmpty()) {
+                api.logging().logToOutput("[SEND TO REPEATER] fallback: AI returned "
+                        + "empty content — nothing to copy to clipboard.");
+                clipboardLine = "The AI returned an EMPTY response — nothing to copy to the clipboard.";
+            } else {
+                try {
+                    Toolkit.getDefaultToolkit().getSystemClipboard()
+                            .setContents(new StringSelection(rawAiOutput), null);
+                    api.logging().logToOutput("[SEND TO REPEATER] fallback: copied "
+                            + rawAiOutput.length() + " chars of raw AI output to clipboard.");
+                    clipboardLine = "The raw AI output (" + rawAiOutput.length()
+                            + " chars) has been copied to the clipboard so you can inspect it.";
+                } catch (Exception ex) {
+                    api.logging().logToError("[SEND TO REPEATER] fallback: clipboard copy "
+                            + "failed: " + ex.getMessage());
+                    clipboardLine = "Failed to copy raw AI output to the clipboard: " + ex.getMessage();
+                }
+            }
+
             JOptionPane.showMessageDialog(this,
-                    "The AI did not produce parseable TEST blocks.\n\n"
+                    "The AI did not produce parseable === TEST === blocks.\n\n"
                   + "The ORIGINAL request has been sent to a new Repeater tab as fallback.\n"
-                  + "The raw AI output has been copied to the clipboard so you can inspect it.",
+                  + clipboardLine + "\n\n"
+                  + "Tip: smaller/local models sometimes ignore the strict TEST block format. "
+                  + "If this happens repeatedly, try a stronger model in the active provider's "
+                  + "Settings tab.",
                     "XagentAI — fallback", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
