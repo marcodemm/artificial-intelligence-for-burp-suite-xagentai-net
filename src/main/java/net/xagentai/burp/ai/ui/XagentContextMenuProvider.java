@@ -133,31 +133,70 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
     }
 
     private void onAnalyzeHttp(ContextMenuEvent event) {
-        HttpRequestResponse rr = resolveHttpSelection(event);
-        if (rr == null) {
+        List<HttpRequestResponse> selection = resolveHttpSelection(event);
+        if (selection.isEmpty()) {
             showWarn("No HTTP request/response selected.");
             return;
         }
         AIProvider provider = providers.active();
-        String content = HttpRequestSerializer.serialize(rr);
+
+        String content;
+        String userMessage;
+        String contextLabel;
+        if (selection.size() == 1) {
+            content = HttpRequestSerializer.serialize(selection.get(0));
+            userMessage = "Analyze the following HTTP exchange:\n\n" + content;
+            contextLabel = "PROXY/HTTP";
+        } else {
+            content = HttpRequestSerializer.serializeAll(selection,
+                    HttpRequestSerializer.DEFAULT_MAX_CHARS);
+            userMessage = "Analyze the following " + selection.size()
+                    + " HTTP exchanges TOGETHER. Look for cross-request issues "
+                    + "(session reuse, token/cookie reuse, redirect chains, "
+                    + "workflow-level logic, information leaking from one "
+                    + "response into a later request) as well as per-request "
+                    + "issues. Reference each exchange by its 'EXCHANGE k of N' "
+                    + "header when discussing it.\n\n" + content;
+            contextLabel = "PROXY/HTTP ×" + selection.size();
+        }
+
         if (Sanitizer.shouldRedact(config.sanitizationMode(), provider.kind())) {
             content = Sanitizer.redactHeaders(content);
+            // userMessage already embeds `content`; rebuild it so the sanitized
+            // version is what actually ships to the model.
+            if (selection.size() == 1) {
+                userMessage = "Analyze the following HTTP exchange:\n\n" + content;
+            } else {
+                userMessage = "Analyze the following " + selection.size()
+                        + " HTTP exchanges TOGETHER. Look for cross-request issues "
+                        + "(session reuse, token/cookie reuse, redirect chains, "
+                        + "workflow-level logic, information leaking from one "
+                        + "response into a later request) as well as per-request "
+                        + "issues. Reference each exchange by its 'EXCHANGE k of N' "
+                        + "header when discussing it.\n\n" + content;
+            }
         }
+
         String systemPrompt = effectiveSystemPrompt(HTTP_SYSTEM_PROMPT);
-        String userMessage = "Analyze the following HTTP exchange:\n\n" + content;
-        askAndShow(provider, systemPrompt, userMessage, "PROXY/HTTP", rr.request());
+        // Pass the FIRST request as the "original" for the Send-to-Repeater
+        // / Send-to-Intruder fallback paths in ResultDialog. Those work
+        // best on a single request; with a multi-selection the operator
+        // can still fire the AI-proposed TEST blocks for the full set.
+        HttpRequest firstReq = selection.get(0).request();
+        askAndShow(provider, systemPrompt, userMessage, contextLabel, firstReq);
     }
 
-    private HttpRequestResponse resolveHttpSelection(ContextMenuEvent event) {
+    private List<HttpRequestResponse> resolveHttpSelection(ContextMenuEvent event) {
         Optional<MessageEditorHttpRequestResponse> editor = event.messageEditorRequestResponse();
         if (editor.isPresent()) {
-            return editor.get().requestResponse();
+            // The message editor only knows about the one it's editing.
+            return List.of(editor.get().requestResponse());
         }
         List<HttpRequestResponse> list = event.selectedRequestResponses();
         if (list != null && !list.isEmpty()) {
-            return list.get(0);
+            return list;
         }
-        return null;
+        return List.of();
     }
 
     // ---- WebSocket context menu ----

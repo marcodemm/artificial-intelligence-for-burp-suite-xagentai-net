@@ -30,6 +30,34 @@ public final class HttpRequestSerializer {
         return serialize(rr, DEFAULT_MAX_CHARS);
     }
 
+    /**
+     * Serialize N request/response pairs into one blob with clear per-item
+     * separators, so the operator can feed a multi-selection from Proxy
+     * History / Target Site Map to the AI and the AI can reason about
+     * cross-request issues (session reuse, token reuse, redirect chains,
+     * workflow logic) as well as per-request ones.
+     *
+     * The overall {@code maxChars} cap is enforced across the whole blob;
+     * each individual exchange gets a fair share of it so one huge body
+     * doesn't starve the others.
+     */
+    public static String serializeAll(List<HttpRequestResponse> rrs, int maxChars) {
+        if (rrs == null || rrs.isEmpty()) return "";
+        if (rrs.size() == 1) return serialize(rrs.get(0), maxChars);
+        StringBuilder sb = new StringBuilder();
+        int n = rrs.size();
+        int perRequest = Math.max(2000, maxChars / n);
+        for (int i = 0; i < n; i++) {
+            HttpRequestResponse rr = rrs.get(i);
+            String url = (rr == null || rr.url() == null) ? "<no url>" : rr.url();
+            sb.append("\n========= EXCHANGE ").append(i + 1).append(" of ").append(n)
+              .append(" — ").append(url).append(" =========\n\n");
+            sb.append(serialize(rr, perRequest));
+            sb.append('\n');
+        }
+        return truncate(sb.toString(), maxChars);
+    }
+
     public static String serialize(HttpRequestResponse rr, int maxChars) {
         if (rr == null) return "";
         StringBuilder sb = new StringBuilder();
