@@ -26,8 +26,9 @@ public final class XagentConfig {
     private String lmStudioModel = "";
     private int lmStudioMaxTokens = 4096;
     private double lmStudioTemperature = 0.2d;
-    // 5 minutes — local models can be slow at prompt processing + generation.
-    private int lmStudioTimeoutSeconds = 300;
+    // 10 minutes — local models can be very slow at prompt processing +
+    // generation, especially large reasoning variants like Bughunter-v10.
+    private int lmStudioTimeoutSeconds = 600;
 
     // --- OpenAI (ChatGPT) -------------------------------------------------
     private String openaiApiKey = "";
@@ -51,14 +52,14 @@ public final class XagentConfig {
     private String ollamaModel = "";
     private int ollamaMaxTokens = 4096;
     private double ollamaTemperature = 0.2d;
-    private int ollamaTimeoutSeconds = 300;
+    private int ollamaTimeoutSeconds = 600;
 
     // --- llama.cpp (local, via llama-server) ------------------------------
     private String llamacppBaseUrl = "http://localhost:8080";
     private String llamacppModel = "";
     private int llamacppMaxTokens = 4096;
     private double llamacppTemperature = 0.2d;
-    private int llamacppTimeoutSeconds = 300;
+    private int llamacppTimeoutSeconds = 600;
 
     // --- Behaviour --------------------------------------------------------
     private SanitizationMode sanitizationMode = SanitizationMode.AUTO;

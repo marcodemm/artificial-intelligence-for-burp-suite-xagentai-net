@@ -241,7 +241,7 @@ public final class ConfigPanel extends JPanel {
         addRow(p, c, 2, "Max tokens:", lmMaxTokensSpinner);
         lmTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
         addRow(p, c, 3, "Temperature:", lmTemperatureSpinner);
-        lmTimeoutSpinner = new JSpinner(new SpinnerNumberModel(300, 1, 3600, 10));
+        lmTimeoutSpinner = new JSpinner(new SpinnerNumberModel(600, 1, 3600, 10));
         addRow(p, c, 4, "Timeout (s):", lmTimeoutSpinner);
 
         JButton lmTestBtn = new JButton("Test connection");
@@ -290,7 +290,7 @@ public final class ConfigPanel extends JPanel {
         ollamaModelField = new JTextField(40);
         ollamaMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
         ollamaTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
-        ollamaTimeoutSpinner = new JSpinner(new SpinnerNumberModel(300, 1, 3600, 10));
+        ollamaTimeoutSpinner = new JSpinner(new SpinnerNumberModel(600, 1, 3600, 10));
         return buildSimpleProviderPanel("ollama", null, ollamaBaseUrlField,
                 ollamaModelField, ollamaMaxTokensSpinner, ollamaTemperatureSpinner,
                 ollamaTimeoutSpinner, "Leave empty to auto-detect via GET /v1/models. e.g. llama3.3, qwen2.5-coder");
@@ -301,7 +301,7 @@ public final class ConfigPanel extends JPanel {
         llamacppModelField = new JTextField(40);
         llamacppMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 1, 1_000_000, 256));
         llamacppTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
-        llamacppTimeoutSpinner = new JSpinner(new SpinnerNumberModel(300, 1, 3600, 10));
+        llamacppTimeoutSpinner = new JSpinner(new SpinnerNumberModel(600, 1, 3600, 10));
         return buildSimpleProviderPanel("llamacpp", null, llamacppBaseUrlField,
                 llamacppModelField, llamacppMaxTokensSpinner, llamacppTemperatureSpinner,
                 llamacppTimeoutSpinner, "Leave empty to use whatever llama-server loaded (usually fine).");
@@ -420,6 +420,10 @@ public final class ConfigPanel extends JPanel {
               + "SUPPORTED PROVIDERS\n"
               + "  Cloud  Claude (Anthropic), OpenAI (ChatGPT), NVIDIA (NIM / API Catalog).\n"
               + "  Local  LM Studio, Ollama, llama.cpp — nothing leaves your machine.\n\n"
+              + "RECOMMENDED LOCAL MODEL\n"
+              + "  Bughunter-v10 — a security-focused local model fine-tuned for the kind\n"
+              + "  of HTTP analysis this extension performs. Hosted on Hugging Face:\n"
+              + "  https://huggingface.co/mmp2055/Bughunter-v10\n\n"
               + "RESULT DIALOG\n"
               + "  • Analysis rendered from Markdown to HTML.\n"
               + "  • Send to Repeater — the AI turns each proposed test into a real HTTP\n"
@@ -448,14 +452,56 @@ public final class ConfigPanel extends JPanel {
         c.insets = new Insets(14, 0, 2, 0);
         p.add(desc, c);
 
-        // Filler to push everything to the top-left.
+        // Button row: open the recommended-model URL in the default browser,
+        // with a clipboard fallback if java.awt.Desktop isn't supported in
+        // the host environment (headless, some Linux WMs, …).
+        JPanel linkRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        linkRow.setOpaque(false);
+        JButton bughunterBtn = new JButton("Open Bughunter-v10 on Hugging Face");
+        bughunterBtn.setToolTipText("https://huggingface.co/mmp2055/Bughunter-v10 — opens in your default browser (falls back to copying the URL to the clipboard).");
+        bughunterBtn.addActionListener(e -> openUrlOrCopy("https://huggingface.co/mmp2055/Bughunter-v10"));
+        linkRow.add(bughunterBtn);
+
         c.gridy = 5;
+        c.weighty = 0;
+        c.fill = GridBagConstraints.NONE;
+        c.insets = new Insets(4, 0, 2, 0);
+        p.add(linkRow, c);
+
+        // Filler to push everything to the top-left.
+        c.gridy = 6;
         c.weighty = 1;
         c.fill = GridBagConstraints.BOTH;
         c.insets = new Insets(0, 0, 0, 0);
         p.add(new JPanel(), c);
 
         return p;
+    }
+
+    /**
+     * Open {@code url} in the operating system's default browser. If
+     * {@code java.awt.Desktop} is unavailable or throws (headless JVM,
+     * some Linux window managers, locked-down environments), fall back to
+     * placing the URL on the clipboard so the operator can paste it.
+     */
+    private void openUrlOrCopy(String url) {
+        try {
+            if (java.awt.Desktop.isDesktopSupported()
+                    && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+                flashStatus("Opened " + url + " in browser.", true);
+                return;
+            }
+        } catch (Exception ignored) {
+            // fall through to clipboard
+        }
+        try {
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(url), null);
+            flashStatus("Could not open browser — URL copied to clipboard: " + url, true);
+        } catch (Exception ex) {
+            flashStatus("Could not open or copy URL: " + ex.getMessage(), false);
+        }
     }
 
     private JLabel boldLabel(String text) {
