@@ -644,11 +644,38 @@ public final class ResultDialog extends JDialog {
                 + " position(s); " + payloadsCopied + " payload(s) copied to clipboard.");
         flashButton(btn, "Opened — payloads copied!", "Send to Intruder");
 
-        JOptionPane.showMessageDialog(this,
+        // Custom dialog with an explicit 'Copy payloads to clipboard' button so
+        // the operator can re-copy the payloads if the automatic copy got
+        // clobbered (common: they switched to another window and copied
+        // something else in the meantime).
+        final String payloadsForClipboard = payloadsBlock;
+        Object[] options = {"Copy payloads to clipboard", "OK"};
+        int choice = JOptionPane.showOptionDialog(this,
                 "Intruder opened with " + parsed.offsets.size() + " §-marked position(s).\n\n"
-              + payloadsCopied + " payload(s) copied to the clipboard.\n"
-              + "Switch to Intruder → Payloads tab → Paste (or Load from clipboard).",
-                "XagentAI — Intruder ready", JOptionPane.INFORMATION_MESSAGE);
+              + payloadsCopied + " payload(s) have been copied to the clipboard automatically.\n"
+              + "Switch to Intruder → Payloads tab → Paste (or Load from clipboard).\n\n"
+              + "If the clipboard was overwritten by another app while this ran, use the\n"
+              + "'Copy payloads to clipboard' button below to put them back on the clipboard.",
+                "XagentAI — Intruder ready",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.INFORMATION_MESSAGE,
+                null,
+                options,
+                options[1]);                     // default = OK
+        if (choice == 0) {                       // operator pressed Copy
+            try {
+                Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new StringSelection(payloadsForClipboard), null);
+                api.logging().logToOutput("[INTRUDER] payloads re-copied to clipboard on operator request ("
+                        + payloadsForClipboard.length() + " chars).");
+                flashButton(btn, "Payloads re-copied!", "Send to Intruder");
+            } catch (Exception ex) {
+                api.logging().logToError("[INTRUDER] manual clipboard re-copy failed: " + ex.getMessage());
+                JOptionPane.showMessageDialog(this,
+                        "Failed to copy payloads to the clipboard: " + ex.getMessage(),
+                        "XagentAI — error", JOptionPane.WARNING_MESSAGE);
+            }
+        }
     }
 
     /**

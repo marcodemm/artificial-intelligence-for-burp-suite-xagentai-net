@@ -24,11 +24,11 @@ public final class XagentConfig {
     private String lmStudioBaseUrl = "http://localhost:1234/v1";
     /** Empty = auto-detect via GET /v1/models and use the loaded model. */
     private String lmStudioModel = "";
-    private int lmStudioMaxTokens = 8192;
-    private double lmStudioTemperature = 0.2d;
+    private int lmStudioMaxTokens = 32768;
+    private double lmStudioTemperature = 0.6d;
     // 10 minutes — local models can be very slow at prompt processing +
     // generation, especially large reasoning variants like Bughunter-v10.
-    private int lmStudioTimeoutSeconds = 600;
+    private int lmStudioTimeoutSeconds = 1200;
 
     // --- OpenAI (ChatGPT) -------------------------------------------------
     private String openaiApiKey = "";
@@ -50,16 +50,16 @@ public final class XagentConfig {
     private String ollamaBaseUrl = "http://localhost:11434";
     /** Empty = auto-detect via GET /v1/models. */
     private String ollamaModel = "";
-    private int ollamaMaxTokens = 8192;
-    private double ollamaTemperature = 0.2d;
-    private int ollamaTimeoutSeconds = 600;
+    private int ollamaMaxTokens = 32768;
+    private double ollamaTemperature = 0.6d;
+    private int ollamaTimeoutSeconds = 1200;
 
     // --- llama.cpp (local, via llama-server) ------------------------------
     private String llamacppBaseUrl = "http://localhost:8080";
     private String llamacppModel = "";
-    private int llamacppMaxTokens = 8192;
-    private double llamacppTemperature = 0.2d;
-    private int llamacppTimeoutSeconds = 600;
+    private int llamacppMaxTokens = 32768;
+    private double llamacppTemperature = 0.6d;
+    private int llamacppTimeoutSeconds = 1200;
 
     // --- Behaviour --------------------------------------------------------
     private SanitizationMode sanitizationMode = SanitizationMode.AUTO;
