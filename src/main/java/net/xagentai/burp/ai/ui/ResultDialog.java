@@ -22,6 +22,7 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JEditorPane;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -30,6 +31,7 @@ import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -40,7 +42,12 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -51,7 +58,7 @@ import java.util.regex.Pattern;
 /**
  * Modeless dialog that shows the AI response (rendered from Markdown to HTML).
  * Footer actions (left → right): Send to Repeater, Send to Intruder,
- * Copy as Markdown, Close.
+ * Copy as Markdown, Save as Markdown, Close.
  *
  * "Send to Repeater" asks the AI a second time to convert the TESTS TO RUN
  * of its previous answer into real HTTP requests, parses the blocks, and
@@ -222,6 +229,11 @@ public final class ResultDialog extends JDialog {
             }
         });
         footer.add(copyBtn);
+
+        JButton saveBtn = new JButton("Save as Markdown");
+        saveBtn.setToolTipText("Save the raw Markdown to a .md file on disk (same content as Copy as Markdown).");
+        saveBtn.addActionListener(e -> saveAsMarkdown(saveBtn));
+        footer.add(saveBtn);
 
         JButton closeBtn = new JButton("Close");
         closeBtn.addActionListener(e -> dispose());
@@ -750,6 +762,65 @@ public final class ResultDialog extends JDialog {
         final byte[] contentBytes;
         final List<int[]> offsets;
         ParsedWire(byte[] c, List<int[]> o) { contentBytes = c; offsets = o; }
+    }
+
+    // ---------------------------------------------------------------------
+    // Save as Markdown: dump rawMarkdown to a .md file picked by the operator
+    // ---------------------------------------------------------------------
+
+    private void saveAsMarkdown(JButton btn) {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Save as Markdown");
+        chooser.setFileFilter(new FileNameExtensionFilter("Markdown (*.md)", "md"));
+        chooser.setAcceptAllFileFilterUsed(true);
+
+        // Prefer ~/Desktop as the starting directory when it exists; otherwise
+        // the user's home. Either way the operator can navigate elsewhere.
+        File home = new File(System.getProperty("user.home", "."));
+        File desktop = new File(home, "Desktop");
+        chooser.setCurrentDirectory(desktop.isDirectory() ? desktop : home);
+
+        // Suggested filename: xagentai-<provider-id>-<yyyyMMdd-HHmmss>.md
+        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String slug = (provider.id() == null ? "ai" : provider.id())
+                .replaceAll("[^a-zA-Z0-9]+", "-")
+                .toLowerCase();
+        chooser.setSelectedFile(
+                new File(chooser.getCurrentDirectory(),
+                        "xagentai-" + slug + "-" + ts + ".md"));
+
+        int res = chooser.showSaveDialog(this);
+        if (res != JFileChooser.APPROVE_OPTION) return;
+
+        File target = chooser.getSelectedFile();
+        if (target == null) return;
+
+        // Auto-append .md when the operator typed a name without extension.
+        if (!target.getName().toLowerCase().endsWith(".md")) {
+            target = new File(target.getParentFile(), target.getName() + ".md");
+        }
+
+        if (target.exists()) {
+            int ok = JOptionPane.showConfirmDialog(this,
+                    "'" + target.getName() + "' already exists. Overwrite?",
+                    "XagentAI — overwrite?",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+            if (ok != JOptionPane.YES_OPTION) return;
+        }
+
+        try {
+            Files.writeString(target.toPath(), rawMarkdown, StandardCharsets.UTF_8);
+            api.logging().logToOutput("[SAVE AS MARKDOWN] wrote "
+                    + rawMarkdown.length() + " chars to " + target.getAbsolutePath());
+            flashButton(btn, "Saved!", "Save as Markdown");
+        } catch (IOException ex) {
+            api.logging().logToError("[SAVE AS MARKDOWN] write failed: " + ex.getMessage());
+            flashButton(btn, "Save failed", "Save as Markdown");
+            JOptionPane.showMessageDialog(this,
+                    "Failed to write file:\n\n" + ex.getMessage(),
+                    "XagentAI — error", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
     // ---------------------------------------------------------------------
