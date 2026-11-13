@@ -311,47 +311,51 @@ public final class ResultDialog extends JDialog {
     private void handleParsedTests(List<TestBlock> tests, String rawAiOutput, JButton btn) {
         btn.setEnabled(true);
         if (tests.isEmpty()) {
-            // Fallback: no TESTS TO RUN parsed → send the ORIGINAL request
-            // to a single Repeater tab, and copy the raw AI output to the
-            // clipboard so the operator can inspect what the model actually
-            // produced. Be honest about the clipboard outcome: some models
-            // (e.g. small local ones) return an empty response and there
-            // was nothing to copy.
-            try {
-                api.repeater().sendToRepeater(originalRequest, "XagentAI");
-                flashButton(btn, "Original sent (no tests)", "Send to Repeater");
-            } catch (Exception ex) {
-                flashButton(btn, "Send failed", "Send to Repeater");
-            }
-
+            // No TESTS TO RUN parsed → do NOT open any Repeater tab. The
+            // previous behaviour sent the original request to a fresh tab
+            // as a 'fallback', but that tab was useless (the operator
+            // already has the original in Proxy History) and polluted the
+            // Repeater panel. Instead, warn the operator and copy the raw
+            // AI output to the clipboard when it is not empty.
             String clipboardLine;
             if (rawAiOutput == null || rawAiOutput.isEmpty()) {
-                api.logging().logToOutput("[SEND TO REPEATER] fallback: AI returned "
-                        + "empty content — nothing to copy to clipboard.");
+                api.logging().logToOutput("[SEND TO REPEATER] AI returned empty content; "
+                        + "no Repeater tab opened.");
                 clipboardLine = "The AI returned an EMPTY response — nothing to copy to the clipboard.";
             } else {
                 try {
                     Toolkit.getDefaultToolkit().getSystemClipboard()
                             .setContents(new StringSelection(rawAiOutput), null);
-                    api.logging().logToOutput("[SEND TO REPEATER] fallback: copied "
-                            + rawAiOutput.length() + " chars of raw AI output to clipboard.");
+                    api.logging().logToOutput("[SEND TO REPEATER] no parseable === TEST === blocks; "
+                            + "copied " + rawAiOutput.length() + " chars of raw AI output to clipboard; "
+                            + "no Repeater tab opened.");
                     clipboardLine = "The raw AI output (" + rawAiOutput.length()
                             + " chars) has been copied to the clipboard so you can inspect it.";
                 } catch (Exception ex) {
-                    api.logging().logToError("[SEND TO REPEATER] fallback: clipboard copy "
-                            + "failed: " + ex.getMessage());
+                    api.logging().logToError("[SEND TO REPEATER] clipboard copy failed: "
+                            + ex.getMessage());
                     clipboardLine = "Failed to copy raw AI output to the clipboard: " + ex.getMessage();
                 }
             }
+            flashButton(btn, "No tests — nothing opened", "Send to Repeater");
 
             JOptionPane.showMessageDialog(this,
-                    "The AI did not produce parseable === TEST === blocks.\n\n"
-                  + "The ORIGINAL request has been sent to a new Repeater tab as fallback.\n"
+                    "The AI did not produce parseable === TEST === blocks, "
+                  + "so NO Repeater tab was opened.\n\n"
                   + clipboardLine + "\n\n"
-                  + "Tip: smaller/local models sometimes ignore the strict TEST block format. "
-                  + "If this happens repeatedly, try a stronger model in the active provider's "
-                  + "Settings tab.",
-                    "XagentAI — fallback", JOptionPane.INFORMATION_MESSAGE);
+                  + "Why this happens:\n"
+                  + "  • Small or local models sometimes ignore the strict TEST block format "
+                  + "and reply in free-form Markdown instead.\n"
+                  + "  • Reasoning models (nemotron super, qwen3-kimi, OpenAI o-series) can "
+                  + "burn the entire token budget 'thinking' and leave the actual answer empty "
+                  + "— check the extension Output log for the finish_reason and the keys of "
+                  + "the message object.\n\n"
+                  + "What to try:\n"
+                  + "  • Raise the Max tokens field in the active provider's Settings tab "
+                  + "(reasoning models need headroom: try 16384 or 32768).\n"
+                  + "  • Switch to a stronger / non-reasoning model for the Send to Repeater "
+                  + "step specifically.",
+                    "XagentAI — no tests produced", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
