@@ -571,14 +571,51 @@ public final class ResultDialog extends JDialog {
         Matcher reqM = INTRUDER_REQUEST_BLOCK.matcher(aiOutput == null ? "" : aiOutput);
         Matcher payM = INTRUDER_PAYLOADS_BLOCK.matcher(aiOutput == null ? "" : aiOutput);
         if (!reqM.find()) {
-            // Fallback: open the original request in Intruder, copy any
-            // payloads we can find in the previous analysis to clipboard.
-            api.intruder().sendToIntruder(originalRequest, "XagentAI");
+            // Do NOT open an Intruder tab as a 'fallback' — a tab with no
+            // §-positions is useless and clutters the panel. Mirror the
+            // Send-to-Repeater guard: warn, copy the raw AI output to the
+            // clipboard when non-empty, and point out that models can
+            // refuse this prompt (seen in the wild with qwen/kimi-style
+            // distilled models on real auth endpoints).
+            String clipboardLine;
+            if (aiOutput == null || aiOutput.isEmpty()) {
+                api.logging().logToOutput("[INTRUDER] AI returned empty content; "
+                        + "no Intruder tab opened.");
+                clipboardLine = "The AI returned an EMPTY response — nothing to copy to the clipboard.";
+            } else {
+                try {
+                    Toolkit.getDefaultToolkit().getSystemClipboard()
+                            .setContents(new StringSelection(aiOutput), null);
+                    api.logging().logToOutput("[INTRUDER] no parseable === INTRUDER REQUEST === block; "
+                            + "copied " + aiOutput.length() + " chars of raw AI output to clipboard; "
+                            + "no Intruder tab opened.");
+                    clipboardLine = "The raw AI output (" + aiOutput.length()
+                            + " chars) has been copied to the clipboard so you can inspect it.";
+                } catch (Exception ex) {
+                    api.logging().logToError("[INTRUDER] clipboard copy failed: " + ex.getMessage());
+                    clipboardLine = "Failed to copy raw AI output to the clipboard: " + ex.getMessage();
+                }
+            }
+            flashButton(btn, "No request block — not opened", "Send to Intruder");
             JOptionPane.showMessageDialog(this,
-                    "The AI did not produce a parseable INTRUDER REQUEST block.\n"
-                  + "Opened the original request in Intruder without positions.",
-                    "XagentAI — fallback", JOptionPane.INFORMATION_MESSAGE);
-            flashButton(btn, "Opened (no positions)", "Send to Intruder");
+                    "The AI did not produce a parseable === INTRUDER REQUEST === block, "
+                  + "so NO Intruder tab was opened.\n\n"
+                  + clipboardLine + "\n\n"
+                  + "Why this happens:\n"
+                  + "  • Small or local models sometimes reply in free-form Markdown instead "
+                  + "of the strict request/payloads block format.\n"
+                  + "  • Reasoning models can burn the entire budget 'thinking' and leave "
+                  + "the actual answer empty.\n"
+                  + "  • Some distilled models (qwen-kimi, etc.) REFUSE to generate fuzzing "
+                  + "payloads for live auth endpoints as an alignment safety behaviour — check "
+                  + "the clipboard output; if it looks like a textual refusal, that's it.\n\n"
+                  + "What to try:\n"
+                  + "  • Switch to a less-restrictive model (Claude, OpenAI, or a vanilla "
+                  + "instruct local model without alignment fine-tuning) for the Send to "
+                  + "Intruder step.\n"
+                  + "  • Raise Max tokens or lower Reasoning Budget in the active provider's "
+                  + "Settings tab if the raw output is truncated mid-answer.",
+                    "XagentAI — no Intruder request produced", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
