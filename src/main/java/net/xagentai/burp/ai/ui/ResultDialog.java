@@ -581,6 +581,37 @@ public final class ResultDialog extends JDialog {
         String wireWithMarkers = normalizeHttpWireFormat(reqM.group(1));
         ParsedWire parsed = extractRangesFromMarkers(wireWithMarkers);
 
+        // Parse the payload list BEFORE deciding to open Intruder — an
+        // Intruder tab with §-positions but no payloads is useless and
+        // just clutters the operator's Intruder panel. If the AI produced
+        // positions but no PAYLOADS block (small reasoning models and
+        // some local models drop the second block), tell the operator and
+        // do NOT open the tab.
+        String payloadsBlock = null;
+        int payloadsCopied = 0;
+        if (payM.find()) {
+            String raw = payM.group(1).trim();
+            if (!raw.isEmpty()) {
+                payloadsBlock = raw;
+                payloadsCopied = (int) raw.lines().filter(l -> !l.isBlank()).count();
+            }
+        }
+        if (payloadsCopied == 0) {
+            api.logging().logToOutput("[INTRUDER] AI returned " + parsed.offsets.size()
+                    + " §-position(s) but no payloads; Intruder tab NOT opened.");
+            flashButton(btn, "No payloads — not opened", "Send to Intruder");
+            JOptionPane.showMessageDialog(this,
+                    "The AI marked " + parsed.offsets.size()
+                  + " §-position(s) but did not produce a payload list.\n\n"
+                  + "A Burp Intruder tab with insertion points but no payloads is not useful, "
+                  + "so no tab was opened.\n\n"
+                  + "Try Send to Intruder again (local / reasoning models sometimes drop the "
+                  + "=== PAYLOADS === block), or switch to a stronger model in the active "
+                  + "provider's Settings tab.",
+                    "XagentAI — no payloads produced", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         List<Range> ranges = new ArrayList<>();
         for (int[] p : parsed.offsets) {
             ranges.add(Range.range(p[0], p[1]));
@@ -598,16 +629,11 @@ public final class ResultDialog extends JDialog {
             return;
         }
 
-        int payloadsCopied = 0;
-        if (payM.find()) {
-            String payloadsBlock = payM.group(1).trim();
-            // Copy raw payload list (one per line) to the clipboard so the
-            // operator can paste them into Intruder → Payloads → Paste.
-            try {
-                Toolkit.getDefaultToolkit().getSystemClipboard()
-                        .setContents(new StringSelection(payloadsBlock), null);
-                payloadsCopied = (int) payloadsBlock.lines().filter(l -> !l.isBlank()).count();
-            } catch (Exception ignored) { }
+        try {
+            Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new StringSelection(payloadsBlock), null);
+        } catch (Exception ex) {
+            api.logging().logToError("[INTRUDER] clipboard copy failed: " + ex.getMessage());
         }
 
         api.logging().logToOutput("[INTRUDER] opened with " + parsed.offsets.size()
