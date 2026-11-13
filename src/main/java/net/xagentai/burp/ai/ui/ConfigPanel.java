@@ -89,6 +89,14 @@ public final class ConfigPanel extends JPanel {
     private JSpinner nvidiaTemperatureSpinner;
     private JSpinner nvidiaTimeoutSpinner;
 
+    // --- Google Gemini ---
+    private JPasswordField geminiApiKeyField;
+    private JTextField geminiBaseUrlField;
+    private JTextField geminiModelField;
+    private JSpinner geminiMaxTokensSpinner;
+    private JSpinner geminiTemperatureSpinner;
+    private JSpinner geminiTimeoutSpinner;
+
     // --- Ollama (local) ---
     private JTextField ollamaBaseUrlField;
     private JTextField ollamaModelField;
@@ -136,6 +144,7 @@ public final class ConfigPanel extends JPanel {
         tabs.addTab("Active provider", buildActiveProviderPanel());
         tabs.addTab("Claude", buildClaudePanel());
         tabs.addTab("OpenAI", buildOpenAiPanel());
+        tabs.addTab("Gemini", buildGeminiPanel());
         tabs.addTab("NVIDIA", buildNvidiaPanel());
         tabs.addTab("LM Studio", buildLMStudioPanel());
         tabs.addTab("Ollama", buildOllamaPanel());
@@ -169,6 +178,7 @@ public final class ConfigPanel extends JPanel {
                 + "CLOUD providers (send data over the internet):\n"
                 + "  • Claude — Anthropic API, requires an Anthropic API key.\n"
                 + "  • OpenAI — ChatGPT API, requires an OpenAI API key.\n"
+                + "  • Gemini — Google AI, requires a Gemini API key (AI Studio).\n"
                 + "  • NVIDIA — NIM / API Catalog, requires an NVIDIA API key.\n\n"
                 + "LOCAL providers (nothing leaves this machine):\n"
                 + "  • LM Studio — OpenAI-compatible endpoint on this machine.\n"
@@ -256,7 +266,7 @@ public final class ConfigPanel extends JPanel {
     }
 
     // =====================================================================
-    // v0.2 providers: OpenAI, NVIDIA, Ollama, llama.cpp.
+    // v0.2 providers: OpenAI, Gemini, NVIDIA, Ollama, llama.cpp.
     // All share the same simple layout, built via buildSimpleProviderPanel().
     // =====================================================================
 
@@ -283,6 +293,20 @@ public final class ConfigPanel extends JPanel {
         return buildSimpleProviderPanel("nvidia", nvidiaApiKeyField, nvidiaBaseUrlField,
                 nvidiaModelField, nvidiaMaxTokensSpinner, nvidiaTemperatureSpinner,
                 nvidiaTimeoutSpinner, "e.g. nvidia/nemotron-3.5-super-vl-120b-a12b, meta/llama-4-scout-17b-16e-instruct");
+    }
+
+    private JPanel buildGeminiPanel() {
+        geminiApiKeyField = new JPasswordField(40);
+        geminiApiKeyField.setToolTipText("Create a key in Google AI Studio (aistudio.google.com) and paste it here.");
+        geminiBaseUrlField = new JTextField(40);
+        geminiBaseUrlField.setToolTipText("Default: https://generativelanguage.googleapis.com — the plugin targets the OpenAI-compat layer at /v1beta/openai/chat/completions.");
+        geminiModelField = new JTextField(40);
+        geminiMaxTokensSpinner = new JSpinner(new SpinnerNumberModel(8192, 1, 1_000_000, 256));
+        geminiTemperatureSpinner = new JSpinner(new SpinnerNumberModel(0.2d, 0.0d, 2.0d, 0.1d));
+        geminiTimeoutSpinner = new JSpinner(new SpinnerNumberModel(90, 1, 3600, 10));
+        return buildSimpleProviderPanel("gemini", geminiApiKeyField, geminiBaseUrlField,
+                geminiModelField, geminiMaxTokensSpinner, geminiTemperatureSpinner,
+                geminiTimeoutSpinner, "Gemini model id — e.g. gemini-2.5-flash, gemini-2.5-pro. Check your AI Studio console for the exact ids available on your account.");
     }
 
     private JPanel buildOllamaPanel() {
@@ -351,7 +375,7 @@ public final class ConfigPanel extends JPanel {
                 + "<b>INACTIVE</b>: never redact — the request is sent AS-IS to the AI (local or cloud).<br>"
                 + "<b>AUTO</b> (default): send the request AS-IS to local models (LM Studio, Ollama, llama.cpp — "
                 + "nothing leaves this machine, so nothing is redacted) and redact only when the active provider "
-                + "is cloud-hosted (Claude, OpenAI, NVIDIA)."
+                + "is cloud-hosted (Claude, OpenAI, Gemini, NVIDIA)."
                 + "</html>");
         addRow(p, c, 0, "Sanitize PII (headers):", sanitizeCombo);
 
@@ -364,7 +388,7 @@ public final class ConfigPanel extends JPanel {
               + "           • Local providers (LM Studio, Ollama, llama.cpp): the request is sent\n"
               + "             AS-IS to the local model — nothing leaves your machine, nothing is\n"
               + "             redacted.\n"
-              + "           • Cloud providers (Claude, OpenAI, NVIDIA): sensitive header VALUES are\n"
+              + "           • Cloud providers (Claude, OpenAI, Gemini, NVIDIA): sensitive header VALUES are\n"
               + "             redacted before the request is sent over the internet.\n\n"
               + "Headers redacted when sanitization runs (VALUES are replaced with [REDACTED];\n"
               + "the header NAMES are kept so the model still sees that auth was present):\n\n"
@@ -418,7 +442,8 @@ public final class ConfigPanel extends JPanel {
               + "Target Site Map or WebSocket History) → Extensions → Artificial Intelligence\n"
               + "for Burp Suite - XagentAI → Analyze with AI.\n\n"
               + "SUPPORTED PROVIDERS\n"
-              + "  Cloud  Claude (Anthropic), OpenAI (ChatGPT), NVIDIA (NIM / API Catalog).\n"
+              + "  Cloud  Claude (Anthropic), OpenAI (ChatGPT), Google Gemini,\n"
+              + "         NVIDIA (NIM / API Catalog).\n"
               + "  Local  LM Studio, Ollama, llama.cpp — nothing leaves your machine.\n\n"
               + "RECOMMENDED LOCAL MODEL\n"
               + "  Bughunter-v10 — a security-focused local model fine-tuned for the kind\n"
@@ -538,6 +563,13 @@ public final class ConfigPanel extends JPanel {
         nvidiaTemperatureSpinner.setValue(config.nvidiaTemperature());
         nvidiaTimeoutSpinner.setValue(config.nvidiaTimeoutSeconds());
 
+        geminiApiKeyField.setText(config.geminiApiKey());
+        geminiBaseUrlField.setText(config.geminiBaseUrl());
+        geminiModelField.setText(config.geminiModel());
+        geminiMaxTokensSpinner.setValue(config.geminiMaxTokens());
+        geminiTemperatureSpinner.setValue(config.geminiTemperature());
+        geminiTimeoutSpinner.setValue(config.geminiTimeoutSeconds());
+
         ollamaBaseUrlField.setText(config.ollamaBaseUrl());
         ollamaModelField.setText(config.ollamaModel());
         ollamaMaxTokensSpinner.setValue(config.ollamaMaxTokens());
@@ -584,6 +616,13 @@ public final class ConfigPanel extends JPanel {
             config.nvidiaMaxTokens((Integer) nvidiaMaxTokensSpinner.getValue());
             config.nvidiaTemperature(((Number) nvidiaTemperatureSpinner.getValue()).doubleValue());
             config.nvidiaTimeoutSeconds((Integer) nvidiaTimeoutSpinner.getValue());
+
+            config.geminiApiKey(new String(geminiApiKeyField.getPassword()));
+            config.geminiBaseUrl(geminiBaseUrlField.getText().trim());
+            config.geminiModel(geminiModelField.getText().trim());
+            config.geminiMaxTokens((Integer) geminiMaxTokensSpinner.getValue());
+            config.geminiTemperature(((Number) geminiTemperatureSpinner.getValue()).doubleValue());
+            config.geminiTimeoutSeconds((Integer) geminiTimeoutSpinner.getValue());
 
             config.ollamaBaseUrl(ollamaBaseUrlField.getText().trim());
             config.ollamaModel(ollamaModelField.getText().trim());

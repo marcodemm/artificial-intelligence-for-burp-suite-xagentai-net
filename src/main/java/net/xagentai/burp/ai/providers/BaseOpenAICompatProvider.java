@@ -45,6 +45,24 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
     protected abstract int timeoutSeconds();
     protected abstract String defaultModel();
 
+    /**
+     * Path (appended to the normalized base URL) for the Chat Completions
+     * endpoint. Defaults to the plain OpenAI spelling. Overridden by providers
+     * that host the OpenAI-compat layer under a non-standard path, e.g.
+     * Google Gemini at {@code /v1beta/openai/chat/completions}.
+     */
+    protected String chatEndpointPath() {
+        return "/v1/chat/completions";
+    }
+
+    /**
+     * Path (appended to the normalized base URL) for the Models list endpoint
+     * used by {@link #autoDetectModel(String)}. Default is OpenAI spelling.
+     */
+    protected String modelsEndpointPath() {
+        return "/v1/models";
+    }
+
     /** Add auth header to the outgoing request. Default: Bearer token. Override as needed. */
     protected void addAuthHeader(Map<String, String> headers) {
         String key = apiKey();
@@ -76,7 +94,7 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
         if (base.isEmpty()) {
             throw new AIException(displayName() + ": base URL is not configured.");
         }
-        String url = base + "/v1/chat/completions";
+        String url = base + chatEndpointPath();
 
         String modelId = model();
         if (modelId == null || modelId.isBlank()) {
@@ -152,7 +170,7 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
     protected String autoDetectModel(String base) throws IOException {
         Map<String, String> h = new LinkedHashMap<>();
         addAuthHeader(h);
-        String body = HttpJson.get(api, base + "/v1/models", h, 10);
+        String body = HttpJson.get(api, base + modelsEndpointPath(), h, 10);
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
         if (root.has("data") && root.get("data").isJsonArray()) {
             JsonArray data = root.getAsJsonArray("data");
@@ -227,7 +245,13 @@ public abstract class BaseOpenAICompatProvider implements AIProvider {
         }
     }
 
-    protected static String normalizeBase(String url) {
+    /**
+     * Strip trailing slash(es) and a trailing {@code /v1} so the base URL can be
+     * concatenated with {@link #chatEndpointPath()}. Overridable because
+     * Gemini's documented base URL ends in {@code /v1beta/openai}, which must
+     * also be stripped before we append {@code /v1beta/openai/chat/completions}.
+     */
+    protected String normalizeBase(String url) {
         if (url == null || url.isBlank()) return "";
         String s = url.trim();
         while (s.endsWith("/")) s = s.substring(0, s.length() - 1);

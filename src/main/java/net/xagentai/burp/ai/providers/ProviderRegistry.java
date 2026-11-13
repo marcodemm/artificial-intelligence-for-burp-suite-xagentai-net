@@ -5,6 +5,7 @@ import burp.api.montoya.logging.Logging;
 
 import net.xagentai.burp.ai.config.XagentConfig;
 import net.xagentai.burp.ai.providers.claude.ClaudeProvider;
+import net.xagentai.burp.ai.providers.gemini.GeminiProvider;
 import net.xagentai.burp.ai.providers.llamacpp.LlamacppProvider;
 import net.xagentai.burp.ai.providers.lmstudio.LMStudioProvider;
 import net.xagentai.burp.ai.providers.nvidia.NvidiaProvider;
@@ -35,6 +36,7 @@ public final class ProviderRegistry {
         // Cloud providers
         r.register(new ClaudeProvider(api, config));
         r.register(new OpenAIProvider(api, config));
+        r.register(new GeminiProvider(api, config));
         r.register(new NvidiaProvider(api, config));
         // Local providers
         r.register(new LMStudioProvider(api, config));

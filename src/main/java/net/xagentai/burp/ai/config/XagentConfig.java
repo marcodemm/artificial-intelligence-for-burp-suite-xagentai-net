@@ -46,6 +46,17 @@ public final class XagentConfig {
     private double nvidiaTemperature = 0.2d;
     private int nvidiaTimeoutSeconds = 90;
 
+    // --- Google Gemini (via OpenAI-compat endpoint) ----------------------
+    // Google exposes the Gemini API behind an OpenAI-compatible layer at
+    //   https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+    // Auth: `Authorization: Bearer <GEMINI_API_KEY>`.
+    private String geminiApiKey = "";
+    private String geminiBaseUrl = "https://generativelanguage.googleapis.com";
+    private String geminiModel = "gemini-2.5-flash";
+    private int geminiMaxTokens = 8192;
+    private double geminiTemperature = 0.2d;
+    private int geminiTimeoutSeconds = 90;
+
     // --- Ollama (local) ---------------------------------------------------
     private String ollamaBaseUrl = "http://localhost:11434";
     /** Empty = auto-detect via GET /v1/models. */
@@ -139,6 +150,24 @@ public final class XagentConfig {
 
     public int nvidiaTimeoutSeconds() { return nvidiaTimeoutSeconds; }
     public void nvidiaTimeoutSeconds(int v) { this.nvidiaTimeoutSeconds = v; }
+
+    public String geminiApiKey() { return geminiApiKey; }
+    public void geminiApiKey(String v) { this.geminiApiKey = v; }
+
+    public String geminiBaseUrl() { return geminiBaseUrl; }
+    public void geminiBaseUrl(String v) { this.geminiBaseUrl = v; }
+
+    public String geminiModel() { return geminiModel; }
+    public void geminiModel(String v) { this.geminiModel = v; }
+
+    public int geminiMaxTokens() { return geminiMaxTokens; }
+    public void geminiMaxTokens(int v) { this.geminiMaxTokens = v; }
+
+    public double geminiTemperature() { return geminiTemperature; }
+    public void geminiTemperature(double v) { this.geminiTemperature = v; }
+
+    public int geminiTimeoutSeconds() { return geminiTimeoutSeconds; }
+    public void geminiTimeoutSeconds(int v) { this.geminiTimeoutSeconds = v; }
 
     public String ollamaBaseUrl() { return ollamaBaseUrl; }
     public void ollamaBaseUrl(String v) { this.ollamaBaseUrl = v; }
