@@ -22,6 +22,7 @@ import net.xagentai.burp.ai.providers.AIResponse;
 import net.xagentai.burp.ai.providers.ProviderRegistry;
 import net.xagentai.burp.ai.util.HttpRequestSerializer;
 import net.xagentai.burp.ai.util.Sanitizer;
+import net.xagentai.burp.ai.util.WafFingerprint;
 
 import javax.swing.JButton;
 import javax.swing.JDialog;
@@ -106,6 +107,75 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
             + "5. REMEDIATION — concrete fix for the dev team.\n\n"
             + "Be concise, actionable, and specific. No disclaimers.";
 
+    private static final String WAF_BYPASS_SYSTEM_PROMPT =
+            "You are a security analyst assisting an AUTHORIZED penetration tester inside\n"
+            + "Burp Suite. The operator hit a blocking response (typically 403, 406, 419,\n"
+            + "429 or 503) and wants variants of the ORIGINAL request to try bypassing the\n"
+            + "WAF / bot manager / rate limiter that produced it. The user message tells\n"
+            + "you the WAF this plugin's fingerprinter guessed from the response headers\n"
+            + "and body — treat that as a hint, not a fact.\n\n"
+            + "Respond with this structure:\n\n"
+            + "1. WAF — confirm or correct the detected WAF, citing the specific response\n"
+            + "   headers or body markers you used to decide. Say 'cannot tell' if the\n"
+            + "   signals are too weak to commit.\n"
+            + "2. WHY BLOCKED — one short paragraph on what likely triggered the block\n"
+            + "   (signature match on a specific parameter, rate limit on this IP+UA,\n"
+            + "   IP reputation, bot-score, missing/invalid session cookie, etc.).\n"
+            + "3. BYPASS STRATEGY — 2-3 sentences on the angle you are taking for THIS\n"
+            + "   specific WAF given modern 2026 defenses. Do NOT recycle the 2017\n"
+            + "   'X-Forwarded-For: 127.0.0.1 + Content-Type trick and pray' recipe:\n"
+            + "   every major CDN strips those today.\n"
+            + "4. OUT-OF-BAND NOTES — list techniques the operator should try OUTSIDE\n"
+            + "   Burp Repeater because this plugin cannot run them (TLS/JA3 fingerprint\n"
+            + "   evasion, origin-IP discovery via censys/shodan, DNS history, chained\n"
+            + "   CDN bypass via the real origin, bot-score warmup with headless browser).\n"
+            + "   This is a short bullet list, NOT request blocks.\n"
+            + "5. BYPASS REQUESTS — produce between 5 and 15 concrete variants of the\n"
+            + "   ORIGINAL request, ONE per block, in the EXACT marker syntax below. The\n"
+            + "   XagentAI Result dialog's 'Send to Repeater' button parses these blocks\n"
+            + "   and opens each variant in its own Repeater tab, so stick to the format\n"
+            + "   literally:\n\n"
+            + "=== TEST: WAF <WAF-name>: <short descriptive technique, max 40 chars> ===\n"
+            + "<METHOD> <path-with-query> HTTP/1.1\n"
+            + "Host: <host>\n"
+            + "<other headers, one per line>\n"
+            + "\n"
+            + "<body if any, otherwise leave this line empty>\n"
+            + "=== END TEST ===\n\n"
+            + "Techniques to pick from (use what fits the DETECTED WAF, not the kitchen\n"
+            + "sink):\n"
+            + "  - Path confusion: '..;/', '/./', '%2e%2e/', trailing '/', trailing '.',\n"
+            + "    matrix params ('/;param=value/'), double slashes, encoded unicode,\n"
+            + "    semicolon path params, forward-slash to backslash on IIS.\n"
+            + "  - Header casing / duplication: 'HOST:', duplicate Host, Transfer-Encoding\n"
+            + "    header-smuggling tricks (TE.CL, CL.TE), duplicated Content-Length.\n"
+            + "  - Method switch: POST to PATCH / PUT / PROPFIND / OPTIONS when the app\n"
+            + "    may still accept it but the WAF rule-set may ignore it.\n"
+            + "  - Content-Type confusion: application/json with form-encoded body,\n"
+            + "    multipart/form-data wrapping of JSON, application/xml.\n"
+            + "  - URL-encoding mutations: double-encode, mixed-case %XX, overlong UTF-8,\n"
+            + "    unicode normalization of key characters in the signature.\n"
+            + "  - Parameter pollution (HPP) and null-byte parameter tricks.\n"
+            + "  - Trusted-IP spoofing headers specific to the DETECTED CDN:\n"
+            + "    'Cf-Connecting-IP', 'True-Client-IP', 'X-Real-IP', 'X-Forwarded-For',\n"
+            + "    'Fastly-Client-IP', 'X-Originating-IP'. Try 127.0.0.1, 10.0.0.1,\n"
+            + "    169.254.169.254, the WAF vendor's internal ranges.\n"
+            + "  - Origin / Referer spoofing to the target's own internal domains.\n"
+            + "  - CDN cache-key confusion: bust the cache with '?cachebuster=xxx',\n"
+            + "    extra query params, Pragma tricks.\n\n"
+            + "Rules:\n"
+            + "- Base each variant on the ORIGINAL request. Keep its auth cookies and\n"
+            + "  session headers unless the specific variant explicitly needs to change\n"
+            + "  them.\n"
+            + "- ONE concrete, complete HTTP request per block. No prose inside blocks.\n"
+            + "- HTTP/1.1 syntax. MUST have a blank line between the header block and the\n"
+            + "  body, otherwise Burp Repeater rejects it.\n"
+            + "- If a header needs an accurate Content-Length, compute it.\n"
+            + "- Do NOT emit destructive variants (DELETE / PUT on admin paths) unless\n"
+            + "  the ORIGINAL request already used that method.\n"
+            + "- No disclaimers — the operator confirmed authorization before invoking\n"
+            + "  this action.";
+
     private final MontoyaApi api;
     private final Logging log;
     private final XagentConfig config;
@@ -129,6 +199,13 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
         JMenuItem analyze = new JMenuItem("Analyze with AI");
         analyze.addActionListener(e -> onAnalyzeHttp(event));
         items.add(analyze);
+
+        JMenuItem wafBypass = new JMenuItem("WAF Bypass with AI");
+        wafBypass.setToolTipText("Fingerprint the WAF in the selected response and ask the AI "
+                + "to generate variant requests tailored to bypass it. Open each variant in its "
+                + "own Repeater tab via Send to Repeater.");
+        wafBypass.addActionListener(e -> onWafBypassHttp(event));
+        items.add(wafBypass);
         return items;
     }
 
@@ -204,6 +281,64 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
         // can still fire the AI-proposed TEST blocks for the full set.
         HttpRequest firstReq = selection.get(0).request();
         askAndShow(provider, systemPrompt, userMessage, contextLabel, firstReq);
+    }
+
+    /**
+     * WAF Bypass action: single request/response only, must have a response
+     * (we need to fingerprint the WAF from its reply before asking the AI).
+     * Reuses the {@code === TEST: ===} block contract so the Result dialog's
+     * "Send to Repeater" button opens each variant in its own tab with
+     * {@code XagentAI: WAF <WAF-name>: <technique>} as the tab title.
+     */
+    private void onWafBypassHttp(ContextMenuEvent event) {
+        List<HttpRequestResponse> selection = resolveHttpSelection(event);
+        if (selection.isEmpty()) {
+            showWarn("No HTTP request/response selected.");
+            return;
+        }
+        if (selection.size() > 1) {
+            JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
+                    "WAF Bypass analyses ONE request/response pair at a time — it needs the "
+                  + "WAF's reply to fingerprint it before suggesting variants.\n\n"
+                  + "Please select exactly one row (the one that got blocked) and try again.",
+                    "XagentAI — select one request",
+                    JOptionPane.WARNING_MESSAGE);
+            log.logToOutput("[WAF_BYPASS] refused: " + selection.size()
+                    + " requests selected, expected 1");
+            return;
+        }
+        HttpRequestResponse rr = selection.get(0);
+        if (!rr.hasResponse() || rr.response() == null) {
+            JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
+                    "WAF Bypass needs the WAF's RESPONSE to fingerprint it (CF-Ray, "
+                  + "X-Akamai-*, X-Amz-Cf-Id, block-page markers, ...).\n\n"
+                  + "The row you selected has no response attached. Please pick one from "
+                  + "Proxy History / Repeater that already received the blocking reply.",
+                    "XagentAI — response required",
+                    JOptionPane.WARNING_MESSAGE);
+            log.logToOutput("[WAF_BYPASS] refused: selection has no response.");
+            return;
+        }
+
+        AIProvider provider = providers.active();
+        String detectedWaf = WafFingerprint.detect(rr.response());
+        int statusCode = rr.response().statusCode();
+
+        String content = HttpRequestSerializer.serialize(rr);
+        if (Sanitizer.shouldRedact(config.sanitizationMode(), provider.kind())) {
+            content = Sanitizer.redactHeaders(content);
+        }
+        String userMessage =
+                "DETECTED WAF (best-effort fingerprint, treat as a hint): " + detectedWaf + "\n"
+              + "BLOCKING STATUS CODE: " + statusCode + "\n\n"
+              + "Generate WAF bypass variants of the ORIGINAL request below. The request "
+              + "and the WAF's response follow:\n\n" + content;
+
+        String systemPrompt = effectiveSystemPrompt(WAF_BYPASS_SYSTEM_PROMPT);
+        log.logToOutput("[WAF_BYPASS] fingerprint=" + detectedWaf + " status=" + statusCode
+                + " provider=" + provider.displayName());
+        askAndShow(provider, systemPrompt, userMessage,
+                "WAF_BYPASS/" + detectedWaf, rr.request());
     }
 
     private List<HttpRequestResponse> resolveHttpSelection(ContextMenuEvent event) {
