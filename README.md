@@ -84,7 +84,7 @@ beyond the AI endpoint the operator configured.
 
 ### Analysis dialog (Markdown-rendered)
 
-![Analysis dialog](images/Main-page.png)
+![Analysis dialog with Send to Repeater, Send to Intruder, Copy as Markdown, Save as Markdown and Close buttons](images/Main-page-02.png)
 
 ### Settings — About tab
 
