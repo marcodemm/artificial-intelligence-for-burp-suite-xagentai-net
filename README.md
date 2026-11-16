@@ -32,8 +32,13 @@
 
 `XagentAI` is a Java extension for Burp Suite Professional / Community built
 on PortSwigger's [Montoya API](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/).
-It gives the operator a right-click entry point — **Analyze with AI** — on
-every request-bearing panel of Burp.
+It gives the operator two right-click entry points on every
+request-bearing panel of Burp:
+- **Analyze with AI** — structured security analysis of the selected
+  request / response.
+- **WAF Bypass with AI** — fingerprints the WAF in the response and asks
+  the AI to generate concrete bypass-variant requests, each one ready to
+  fire in its own Repeater tab.
 
 ### Positioning
 
@@ -46,20 +51,25 @@ AI, and the AI's proposed tests land back where they belong in Burp
 control of every action; there is no autonomous mode, no agent loop and
 no tool-calling layer in front of Burp.
 
-The result dialog renders the AI's answer (Markdown → HTML) and exposes three
+The result dialog renders the AI's answer (Markdown → HTML) and exposes four
 action buttons:
 
 - **Send to Repeater** — asks the AI a second time to convert the `TESTS TO
   RUN` section of its previous answer into real HTTP requests, parses them,
   and opens each one in its **own Repeater tab** named `XagentAI: <test
-  name>`. Falls back to sending the original request when no tests were
-  proposed.
+  name>`. The same pipeline is reused by the **WAF Bypass with AI** action,
+  which produces blocks named `XagentAI: WAF <WAF>: <technique>`.
 - **Send to Intruder** — asks the AI to pick the best `§...§` insertion
   points on the original request, opens **Intruder with the positions already
   set**, and copies the suggested payload list to the clipboard (paste into
   Payloads → Simple list).
 - **Copy as Markdown** — raw analysis to the clipboard, ready to drop into a
   report.
+- **Save as Markdown** — same content as *Copy as Markdown* but dumped to a
+  `.md` file on disk via a file chooser (default
+  `~/Desktop/xagentai-<provider>-<yyyyMMdd-HHmmss>.md`, UTF-8, overwrite
+  confirmation). Useful for keeping each analysis as evidence in the
+  engagement folder without round-tripping through the clipboard.
 
 There is **no automatic mode**, **no telemetry** and **no outbound traffic**
 beyond the AI endpoint the operator configured.
@@ -70,7 +80,7 @@ beyond the AI endpoint the operator configured.
 
 ### Right-click menu (Proxy, Repeater, Intruder, Scanner, Target, WebSockets)
 
-![Analyze with AI menu](images/Menu.png)
+![XagentAI context menu with Analyze with AI and WAF Bypass with AI](images/Menu-plus-WAF.png)
 
 ### Analysis dialog (Markdown-rendered)
 
@@ -94,14 +104,15 @@ beyond the AI endpoint the operator configured.
 
 ## Supported AI providers
 
-| Provider      | Kind  | Default endpoint                           | Default model                     |
-|---------------|-------|--------------------------------------------|-----------------------------------|
-| **Claude**    | Cloud | `https://api.anthropic.com`                | `claude-haiku-5-5`                |
-| **OpenAI**    | Cloud | `https://api.openai.com`                   | `gpt-4o-mini`                     |
-| **NVIDIA**    | Cloud | `https://integrate.api.nvidia.com`         | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
-| **LM Studio** | Local | `http://localhost:1234/v1`                 | auto-detect via `/v1/models`      |
-| **Ollama**    | Local | `http://localhost:11434`                   | auto-detect via `/v1/models`      |
-| **llama.cpp** | Local | `http://localhost:8080` (`llama-server`)   | whatever `llama-server` loaded    |
+| Provider      | Kind  | Default endpoint                                      | Default model                     |
+|---------------|-------|-------------------------------------------------------|-----------------------------------|
+| **Claude**    | Cloud | `https://api.anthropic.com`                           | `claude-haiku-5-5`                |
+| **OpenAI**    | Cloud | `https://api.openai.com`                              | `gpt-4o-mini`                     |
+| **Gemini**    | Cloud | `https://generativelanguage.googleapis.com`           | `gemini-2.5-flash`                |
+| **NVIDIA**    | Cloud | `https://integrate.api.nvidia.com`                    | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| **LM Studio** | Local | `http://localhost:1234/v1`                            | auto-detect via `/v1/models`      |
+| **Ollama**    | Local | `http://localhost:11434`                              | auto-detect via `/v1/models`      |
+| **llama.cpp** | Local | `http://localhost:8080` (`llama-server`)              | whatever `llama-server` loaded    |
 
 Notes on provider quirks:
 
@@ -117,6 +128,11 @@ Notes on provider quirks:
   **Refresh** button repopulates the combo and marks the loaded model in bold.
 - **Ollama** is addressed through its OpenAI-compatible endpoint
   (`/v1/chat/completions`), not the native `/api/chat` one.
+- **Google Gemini** is addressed through Google's OpenAI-compatibility
+  layer at `/v1beta/openai/chat/completions` (currently in beta;
+  feature-compatible subset of the native Gemini API — enough for
+  `messages[]` + `max_tokens` + `temperature`). API key comes from Google
+  AI Studio.
 
 Each sub-tab in **Settings** has a **Test connection** button that round-trips
 a short request and reports latency + outcome.
@@ -125,8 +141,8 @@ a short request and reports latency + outcome.
 
 ## Where it integrates in Burp
 
-The right-click entry **Extensions → Artificial Intelligence for Burp Suite -
-XagentAI → Analyze with AI** appears in:
+The right-click entries **Extensions → Artificial Intelligence for Burp
+Suite - XagentAI → Analyze with AI / WAF Bypass with AI** appear in:
 
 | Burp panel           | What is sent to the AI                                       |
 |----------------------|--------------------------------------------------------------|
@@ -137,9 +153,13 @@ XagentAI → Analyze with AI** appears in:
 | **Target Site Map**  | Selected nodes' request/response pairs                       |
 | **WebSocket History**| Selected frames (direction, payload, timestamp)              |
 
+*WAF Bypass with AI* only fires on a **single** row that has a response
+attached (needs the WAF's reply to fingerprint it); on multi-selection or
+response-less rows it refuses with a pop-up.
+
 The plugin also registers a top-bar **XagentAI** tab that hosts the Settings
-panel (9 sub-tabs: Active provider · Claude · OpenAI · NVIDIA · LM Studio ·
-Ollama · llama.cpp · Behaviour · About).
+panel (10 sub-tabs: Active provider · Claude · OpenAI · Gemini · NVIDIA ·
+LM Studio · Ollama · llama.cpp · Behaviour · About).
 
 ### Note on WebSocket analysis
 
@@ -237,7 +257,7 @@ The canonical flow is:
 2. A progress dialog shows the elapsed seconds while the active provider
    generates the analysis.
 3. The **result dialog** opens with the Markdown-rendered analysis and
-   three buttons:
+   four buttons:
    - **Send to Repeater** — the AI generates concrete HTTP requests from
      its `TESTS TO RUN` section; each one opens in its own Repeater tab.
      Click **Send** in each tab to fire it, inspect the response, iterate.
@@ -247,9 +267,44 @@ The canonical flow is:
      clipboard) → **Start attack**.
    - **Copy as Markdown** — paste the raw AI output straight into your
      bug-bounty / pentest report.
+   - **Save as Markdown** — same content, saved as a `.md` file on disk
+     (default filename `xagentai-<provider>-<yyyyMMdd-HHmmss>.md` under
+     `~/Desktop`), so you can keep each analysis as evidence in the
+     engagement folder.
 
 The result dialog is **modeless**, so you can keep it open while you work
 in Repeater / Intruder and come back to it for the next action.
+
+### WAF Bypass with AI
+
+For requests that come back with a blocking status code (typically 403,
+406, 419, 429 or 503), the second right-click entry **WAF Bypass with
+AI** takes a dedicated path:
+
+1. The plugin **fingerprints the WAF / CDN** from the response headers,
+   cookies and body (Cloudflare, Akamai, AWS CloudFront/WAF, Imperva
+   Incapsula, Sucuri, F5 BIG-IP/ASM, ModSecurity, Fortinet FortiWeb,
+   Barracuda, Fastly, Google Cloud Armor, Azure Front Door, Wordfence),
+   or falls back to a status-code hint when no signature matches.
+2. It asks the active provider for a Markdown analysis that lists the
+   confirmed WAF, why the block likely triggered, the bypass strategy
+   tailored to that WAF (modern 2026 techniques — path confusion,
+   TE/CL smuggling, method switching, content-type confusion,
+   URL-encoding mutations, HPP, trusted-IP spoofing headers specific to
+   the detected CDN), and out-of-band notes (JA3/JA4 evasion, origin-IP
+   discovery, DNS history) that must be run outside Burp.
+3. The AI also emits **5 to 15 concrete request variants**, each one
+   wrapped in the same `=== TEST: ===` block contract that the regular
+   analysis uses, so **Send to Repeater** opens each variant in its own
+   tab named `XagentAI: WAF <WAF>: <technique>`.
+4. Click **Send** on each tab and sort by status code to spot the
+   variant that got through (`200` / `302` instead of `403` / `429`).
+
+> ⚠️ **Ethical note.** WAF-bypass testing is a legitimate technique on
+> targets where it is in scope, but many bug-bounty programs (HackerOne,
+> BugCrowd, Intigriti) list WAF bypass as *intended behavior, out of
+> scope*. Read the program policy before firing this action against a
+> third-party target.
 
 ---
 
@@ -257,15 +312,17 @@ in Repeater / Intruder and come back to it for the next action.
 
 When the operator picks "Analyze with AI" on a target request, the plugin
 serializes the full request (and sometimes the response) and sends it to the
-AI endpoint. For **cloud** providers (Claude / OpenAI / NVIDIA) this means
-those bytes leave your machine over the network and may:
+AI endpoint. For **cloud** providers (Claude / OpenAI / Gemini / NVIDIA)
+this means those bytes leave your machine over the network and may:
 
 - Be logged by the provider for abuse / debugging purposes.
 - Depending on your contract, be used for model training (Anthropic
   Messages API: no training on API data; OpenAI: depends on your
-  org-level opt-out; NVIDIA NIM: depends on the deployment). Check your
-  provider's current policy before enabling a cloud backend on a sensitive
-  target.
+  org-level opt-out; Google Gemini: depends on the tier you use in
+  Google AI Studio / Vertex AI — read Google's current Terms before
+  enabling it on sensitive traffic; NVIDIA NIM: depends on the
+  deployment). Check your provider's current policy before enabling a
+  cloud backend on a sensitive target.
 - Contain material that should not leave the engagement:
   `Authorization: Bearer <real JWT>`, `Cookie: session=<real>`,
   `X-Api-Key: <real>`, PII in the request body, …
