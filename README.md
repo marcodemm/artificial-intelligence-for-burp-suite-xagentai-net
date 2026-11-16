@@ -88,7 +88,7 @@ beyond the AI endpoint the operator configured.
 
 ### Settings — About tab
 
-![Settings · About](images/Main-plugin-panel.png)
+![Settings · About tab showing version 0.2.0 and the 10 sub-tabs including Gemini](images/Main-plugin-panel-02.png)
 
 ### Send to Repeater — one tab per AI-proposed test
 
