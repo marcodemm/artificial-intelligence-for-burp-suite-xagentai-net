@@ -24,6 +24,7 @@ import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -150,7 +151,15 @@ public final class ConfigPanel extends JPanel {
         tabs.addTab("Ollama", buildOllamaPanel());
         tabs.addTab("llama.cpp", buildLlamacppPanel());
         tabs.addTab("Behaviour", buildBehaviourPanel());
-        tabs.addTab("About", buildAboutPanel());
+        // Wrap the About panel in a scroll pane — its text can exceed the
+        // available vertical space on small windows / low DPI screens, and
+        // the raw JPanel has no scrollbar of its own.
+        JScrollPane aboutScroll = new JScrollPane(buildAboutPanel(),
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        aboutScroll.setBorder(BorderFactory.createEmptyBorder());
+        aboutScroll.getVerticalScrollBar().setUnitIncrement(16);
+        tabs.addTab("About", aboutScroll);
         add(tabs, BorderLayout.CENTER);
 
         // Footer
@@ -440,7 +449,8 @@ public final class ConfigPanel extends JPanel {
                 "Brings multiple AI providers directly into the Burp Suite workflow.\n"
               + "Right-click any request (Proxy History, Repeater, Intruder, Scanner Issues,\n"
               + "Target Site Map or WebSocket History) → Extensions → Artificial Intelligence\n"
-              + "for Burp Suite - XagentAI → Analyze with AI.\n\n"
+              + "for Burp Suite - XagentAI → Analyze with AI, or WAF Bypass with AI when the\n"
+              + "response looks WAF-blocked.\n\n"
               + "SUPPORTED PROVIDERS\n"
               + "  Cloud  Claude (Anthropic), OpenAI (ChatGPT), Google Gemini,\n"
               + "         NVIDIA (NIM / API Catalog).\n"
@@ -449,15 +459,31 @@ public final class ConfigPanel extends JPanel {
               + "  Bughunter-v10 — a security-focused local model fine-tuned for the kind\n"
               + "  of HTTP analysis this extension performs. Hosted on Hugging Face:\n"
               + "  https://huggingface.co/mmp2055/Bughunter-v10\n\n"
+              + "CONTEXT MENU ACTIONS\n"
+              + "  • Analyze with AI — structured security analysis of the selected\n"
+              + "    request / response (endpoint, auth, vulnerabilities, tests to run,\n"
+              + "    Intruder payloads).\n"
+              + "  • WAF Bypass with AI — fingerprints the WAF/CDN in the response\n"
+              + "    (Cloudflare, Akamai, AWS CloudFront/WAF, Imperva, Sucuri, F5,\n"
+              + "    ModSecurity, Fortinet, Barracuda, Fastly, GCP Armor, Azure Front\n"
+              + "    Door, Wordfence or Unknown) and asks the AI for 5-15 concrete\n"
+              + "    bypass-variant requests tailored to that WAF; Send to Repeater\n"
+              + "    opens each one in its own tab. Only runs on a single row that\n"
+              + "    already has a response.\n\n"
               + "RESULT DIALOG\n"
               + "  • Analysis rendered from Markdown to HTML.\n"
               + "  • Send to Repeater — the AI turns each proposed test into a real HTTP\n"
               + "    request and each one opens in its own Repeater tab (falls back to the\n"
-              + "    original request when no tests were proposed).\n"
+              + "    original request when no tests were proposed). Used by both Analyze\n"
+              + "    with AI and WAF Bypass with AI.\n"
               + "  • Send to Intruder — the AI picks the best §-marked position, opens\n"
               + "    Intruder with the positions already set, and copies the payload list\n"
               + "    to the clipboard, ready to paste into the Payloads tab.\n"
-              + "  • Copy as Markdown — copies the raw analysis to the clipboard.\n\n"
+              + "  • Copy as Markdown — copies the raw analysis to the clipboard.\n"
+              + "  • Save as Markdown — saves the raw analysis to a .md file on disk\n"
+              + "    via a file chooser (default ~/Desktop/xagentai-<provider>-\n"
+              + "    <yyyyMMdd-HHmmss>.md, UTF-8, overwrite confirmation). Keep each\n"
+              + "    analysis as evidence in the engagement folder.\n\n"
               + "PRIVACY\n"
               + "  Sanitize PII combo (Active / Inactive / Auto). In Auto, sensitive header\n"
               + "  values (Authorization, Cookie, API-key headers) are redacted only when\n"
