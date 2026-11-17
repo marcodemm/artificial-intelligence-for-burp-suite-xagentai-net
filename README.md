@@ -4,6 +4,12 @@
 > right-click any request → get a structured security analysis → send
 > AI-proposed tests to Repeater or Intruder with a single click.
 
+[![Latest release](https://img.shields.io/github/v/release/marcodemm/artificial-intelligence-for-burp-suite-xagentai-net?label=download&color=orange)](https://github.com/marcodemm/artificial-intelligence-for-burp-suite-xagentai-net/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
+📦 **[Download the latest JAR](https://github.com/marcodemm/artificial-intelligence-for-burp-suite-xagentai-net/releases/latest/download/xagentai-burp-ai-0.2.0.jar)** — drop it into Burp via **Extensions → Installed → Add → Java**.
+See [Install](#install) for the step-by-step.
+
 - **Name in Burp:** `Artificial Intelligence for Burp Suite - XagentAI`
 - **Version:** `0.2.0`
 - **Author:** [xagentai.net](https://xagentai.net)
@@ -189,8 +195,11 @@ Burp's native WebSocket Repeater for frame-level replay.
 
 ### From a downloaded `.jar`
 
-1. Get the latest `xagentai-burp-ai-X.Y.Z.jar` (from a GitHub Release, or
-   build it yourself — see [Build from source](#build-from-source)).
+1. Download the latest JAR from
+   **[GitHub Releases](https://github.com/marcodemm/artificial-intelligence-for-burp-suite-xagentai-net/releases/latest)**
+   (direct link:
+   [xagentai-burp-ai-0.2.0.jar](https://github.com/marcodemm/artificial-intelligence-for-burp-suite-xagentai-net/releases/latest/download/xagentai-burp-ai-0.2.0.jar)),
+   or build it yourself — see [Build from source](#build-from-source).
 2. In Burp: **Extensions → Installed → Add** → Extension type: `Java` →
    select the `.jar`.
 3. Open the **XagentAI** top-bar tab → **Settings** → configure your active
