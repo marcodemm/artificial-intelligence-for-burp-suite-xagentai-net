@@ -8,7 +8,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.0] — 2026-11-12
+## [0.2.0] — 2026-11-12 (latest build: 2026-11-21)
+
+Hardening pass for BApp Store submission plus a set of post-release features
+that keep the `0.2.0` tag (the published GitHub release JAR is overwritten in
+place when each addition lands, so the download URL stays stable).
+
+### Added after 2026-11-12
+
+- **Google Gemini** as the 4th cloud provider, via Google's OpenAI-compat
+  endpoint at `/v1beta/openai/chat/completions` (API key from Google AI
+  Studio). Settings grows a 10th sub-tab.
+- **Save as Markdown** button on the result dialog — dumps the raw analysis
+  to a `.md` file (default `~/Desktop/xagentai-<provider>-<ts>.md`, UTF-8,
+  overwrite confirmation) so the operator can keep each analysis as
+  engagement evidence without round-tripping through the clipboard.
+- **WAF Bypass with AI** context-menu action: fingerprints the WAF/CDN in
+  the selected response (13 strong native signatures + fallback to the
+  bundled identYwaf 95-WAF catalog), feeds the detected WAF to the AI
+  along with the request/response pair, and asks for 5-15 concrete
+  bypass-variant requests wrapped in the same `=== TEST: ===` contract —
+  so the existing *Send to Repeater* pipeline opens each one in its own
+  Repeater tab named `XagentAI: WAF <WAF>: <technique>`.
+- **Active WAF Detection** context-menu action (opt-in, confirmation
+  pop-up): ports identYwaf's active-probing logic. Sends 45 crafted
+  payloads at 2 req/s under a random query parameter, builds the blocking
+  bit-vector, and matches it against the identYwaf catalog (exact first,
+  partial match with per-WAF confidence as fallback). Chains into *WAF
+  Bypass with AI* with the detected WAF as a seed hint.
+    - Double baseline (two consecutive benign requests): flags the result
+      `baselineReliable=false` when the two responses disagree OR when the
+      baseline is itself a 4xx/5xx; in that case the prober switches to a
+      stricter *blocked* rule — only an explicit block status
+      (403/406/429/451/503) or a protection-keyword hit count, so a plain
+      "400 vs 401" app-level noise does not inflate the WAF signature.
+    - Partial match is suppressed when fewer than 5 payloads are blocked
+      (mirrors identYwaf's `MIN_MATCH_PARTIAL`), so near-empty vectors do
+      not emit confident-but-meaningless suggestions like "WebSEAL 96%".
+    - Passive-match collector in the prober now calls both our native
+      13-WAF detector (catches CDNs by headers — `Server: cloudflare`,
+      `CF-Ray`, `X-Akamai-*`, `X-Amz-Cf-Id`, …) AND the identYwaf regex
+      catalog (catches WAFs by their block-page markers), since the two
+      are complementary.
+- Bundled `src/main/resources/identywaf-data.json` (MIT — Copyright
+  2019-2026 Miroslav Stampar). Full licence notice at
+  [`NOTICE-identywaf.txt`](NOTICE-identywaf.txt) in the repository root.
+
+### Changed after 2026-11-12
+
+- About tab: reorganised to list the three context-menu actions explicitly
+  and the four result-dialog buttons; added a CREDITS section with the
+  identYwaf attribution; wrapped in a `JScrollPane` so longer text doesn't
+  clip on smaller windows.
+- Public README and private technical README updated to reflect every
+  addition above.
+- Several small intruder/repeater fixes (refuse to open empty tabs when
+  the AI returned no parseable blocks, honest clipboard reporting, Cancel
+  button on the waiting dialogs, 10-minute default timeouts for local
+  providers, etc.) accumulated through the November iteration.
+
+## [0.2.0] — 2026-11-12 (initial release)
 
 Hardening pass for BApp Store submission. All visible behaviour is unchanged;
 the plugin now meets PortSwigger's acceptance criteria 5, 6, 7 and 10.

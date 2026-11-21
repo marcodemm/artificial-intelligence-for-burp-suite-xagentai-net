@@ -38,13 +38,18 @@ See [Install](#install) for the step-by-step.
 
 `XagentAI` is a Java extension for Burp Suite Professional / Community built
 on PortSwigger's [Montoya API](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/).
-It gives the operator two right-click entry points on every
+It gives the operator three right-click entry points on every
 request-bearing panel of Burp:
 - **Analyze with AI** — structured security analysis of the selected
   request / response.
 - **WAF Bypass with AI** — fingerprints the WAF in the response and asks
   the AI to generate concrete bypass-variant requests, each one ready to
   fire in its own Repeater tab.
+- **Active WAF Detection** — opt-in active probe based on
+  [identYwaf](https://github.com/stamparm/identYwaf) (MIT): sends 45
+  crafted payloads at 2 req/s and identifies the WAF among ~95
+  vendors by its blocking pattern. Chains straight into *WAF Bypass
+  with AI* with the detected WAF as a seed hint.
 
 ### Positioning
 
@@ -148,7 +153,8 @@ a short request and reports latency + outcome.
 ## Where it integrates in Burp
 
 The right-click entries **Extensions → Artificial Intelligence for Burp
-Suite - XagentAI → Analyze with AI / WAF Bypass with AI** appear in:
+Suite - XagentAI → Analyze with AI / WAF Bypass with AI / Active WAF
+Detection** appear in:
 
 | Burp panel           | What is sent to the AI                                       |
 |----------------------|--------------------------------------------------------------|
@@ -293,8 +299,10 @@ AI** takes a dedicated path:
 1. The plugin **fingerprints the WAF / CDN** from the response headers,
    cookies and body (Cloudflare, Akamai, AWS CloudFront/WAF, Imperva
    Incapsula, Sucuri, F5 BIG-IP/ASM, ModSecurity, Fortinet FortiWeb,
-   Barracuda, Fastly, Google Cloud Armor, Azure Front Door, Wordfence),
-   or falls back to a status-code hint when no signature matches.
+   Barracuda, Fastly, Google Cloud Armor, Azure Front Door, Wordfence).
+   If none of those 13 strong signatures matches, it falls back to the
+   bundled identYwaf catalog of ~95 WAFs (passive regex match over the
+   raw response); last resort is a status-code hint.
 2. It asks the active provider for a Markdown analysis that lists the
    confirmed WAF, why the block likely triggered, the bypass strategy
    tailored to that WAF (modern 2026 techniques — path confusion,
@@ -314,6 +322,37 @@ AI** takes a dedicated path:
 > BugCrowd, Intigriti) list WAF bypass as *intended behavior, out of
 > scope*. Read the program policy before firing this action against a
 > third-party target.
+
+### Active WAF Detection
+
+An opt-in active probe based on
+[identYwaf](https://github.com/stamparm/identYwaf) (MIT, Copyright
+2019-2026 Miroslav Stampar — see
+[`NOTICE-identywaf.txt`](NOTICE-identywaf.txt)). Use it when the response
+alone isn't enough to identify the WAF (silent WAFs that strip their own
+headers, generic error pages, unknown vendors).
+
+1. Right-click the request → **Active WAF Detection**.
+2. A confirmation pop-up shows the exact number of requests the probe
+   will send (1 baseline + 45 crafted payloads = **46 requests**), the
+   target URL, and the rate limit. Nothing goes out until you confirm.
+3. The plugin sends 45 identYwaf payloads (SQLi, XSS, XXE, LDAPi, path
+   traversal, …) at **2 requests per second**, each one under a random
+   query parameter. Classification = "blocked" when the response status
+   differs from the baseline or when the body contains any of
+   identYwaf's protection keywords.
+4. The resulting bit-vector is matched against identYwaf's catalog of
+   **~95 WAFs**: exact match first, then partial-match with
+   confidence percentage per WAF.
+5. Result dialog shows: blind-match table with confidence per WAF,
+   passive regex hits picked up on the way, per-payload table, and a
+   **"Run WAF Bypass with AI"** button that chains into the previous
+   action with the top-detected WAF as a seed hint.
+
+> ⚠️ **Same ethical note applies, with teeth.** Active WAF Detection is
+> *active intrusive probing*. Only run it against targets where the
+> program policy explicitly permits WAF testing. On many programs this
+> counts as abusing a security control and is out of scope.
 
 ---
 

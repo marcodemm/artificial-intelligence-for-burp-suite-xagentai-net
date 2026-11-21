@@ -20,9 +20,11 @@ import net.xagentai.burp.ai.providers.AIProvider;
 import net.xagentai.burp.ai.providers.AIRequest;
 import net.xagentai.burp.ai.providers.AIResponse;
 import net.xagentai.burp.ai.providers.ProviderRegistry;
+import net.xagentai.burp.ai.util.ActiveWafProber;
 import net.xagentai.burp.ai.util.HttpRequestSerializer;
 import net.xagentai.burp.ai.util.Sanitizer;
 import net.xagentai.burp.ai.util.WafFingerprint;
+import net.xagentai.burp.ai.util.WafSignatures;
 
 import javax.swing.JButton;
 import javax.swing.JDialog;
@@ -204,8 +206,16 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
         wafBypass.setToolTipText("Fingerprint the WAF in the selected response and ask the AI "
                 + "to generate variant requests tailored to bypass it. Open each variant in its "
                 + "own Repeater tab via Send to Repeater.");
-        wafBypass.addActionListener(e -> onWafBypassHttp(event));
+        wafBypass.addActionListener(e -> onWafBypassHttp(event, null));
         items.add(wafBypass);
+
+        JMenuItem activeWaf = new JMenuItem("Active WAF Detection");
+        activeWaf.setToolTipText("Send identYwaf's catalog of 45 crafted payloads (SQLi, XSS, "
+                + "XXE, LDAPi, traversal, …) at 2 req/s to fingerprint the WAF by its blocking "
+                + "pattern. Opt-in only — asks for confirmation before sending any traffic. "
+                + "Use only on targets authorized for active probing.");
+        activeWaf.addActionListener(e -> onActiveWafDetect(event));
+        items.add(activeWaf);
         return items;
     }
 
@@ -290,7 +300,7 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
      * "Send to Repeater" button opens each variant in its own tab with
      * {@code XagentAI: WAF <WAF-name>: <technique>} as the tab title.
      */
-    private void onWafBypassHttp(ContextMenuEvent event) {
+    private void onWafBypassHttp(ContextMenuEvent event, String wafHint) {
         List<HttpRequestResponse> selection = resolveHttpSelection(event);
         if (selection.isEmpty()) {
             showWarn("No HTTP request/response selected.");
@@ -321,7 +331,11 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
         }
 
         AIProvider provider = providers.active();
-        String detectedWaf = WafFingerprint.detect(rr.response());
+        // Trust an operator-supplied hint (e.g. from Active WAF Detection)
+        // over the quick-and-dirty single-response fingerprint.
+        String detectedWaf = (wafHint != null && !wafHint.isBlank())
+                ? wafHint
+                : WafFingerprint.detect(rr.response());
         int statusCode = rr.response().statusCode();
 
         String content = HttpRequestSerializer.serialize(rr);
@@ -336,9 +350,213 @@ public final class XagentContextMenuProvider implements ContextMenuItemsProvider
 
         String systemPrompt = effectiveSystemPrompt(WAF_BYPASS_SYSTEM_PROMPT);
         log.logToOutput("[WAF_BYPASS] fingerprint=" + detectedWaf + " status=" + statusCode
-                + " provider=" + provider.displayName());
+                + " provider=" + provider.displayName()
+                + (wafHint != null && !wafHint.isBlank() ? " (hint supplied)" : ""));
         askAndShow(provider, systemPrompt, userMessage,
                 "WAF_BYPASS/" + detectedWaf, rr.request());
+    }
+
+    /**
+     * Active WAF Detection: opt-in active probing using identYwaf's catalog
+     * of 45 crafted payloads. Sent at 2 req/s through Burp's HTTP stack
+     * (upstream proxy and TLS settings honoured). Classifies each response
+     * as blocked/not-blocked by comparing to a baseline, builds the
+     * identYwaf signature, and identifies the WAF with exact-or-partial
+     * match against the 95-WAF catalog shipped as a resource.
+     */
+    private void onActiveWafDetect(ContextMenuEvent event) {
+        List<HttpRequestResponse> selection = resolveHttpSelection(event);
+        if (selection.isEmpty()) {
+            showWarn("No HTTP request selected.");
+            return;
+        }
+        if (selection.size() > 1) {
+            JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
+                    "Active WAF Detection probes ONE endpoint at a time.\n\n"
+                  + "Please select exactly one request and try again.",
+                    "XagentAI — select one request",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        HttpRequestResponse rr = selection.get(0);
+        if (rr.request() == null) {
+            showWarn("The selected row does not carry a valid request.");
+            return;
+        }
+
+        int payloadCount;
+        try {
+            payloadCount = WafSignatures.get().payloadCount();
+        } catch (RuntimeException ex) {
+            JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
+                    "Could not load the identYwaf signature catalog:\n\n" + ex.getMessage(),
+                    "XagentAI — error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        String url = rr.request().url();
+        int delayMs = 500; // 2 requests per second.
+        int etaSeconds = (payloadCount * delayMs) / 1000 + 5;
+        int ok = JOptionPane.showConfirmDialog(ExtensionLifecycle.suiteFrame(),
+                "This will send " + (payloadCount + 1) + " requests to:\n\n"
+              + "    " + url + "\n\n"
+              + "— 1 baseline with a benign value.\n"
+              + "— " + payloadCount + " probes carrying identYwaf's crafted payloads "
+                 + "(SQLi, XSS, XXE, LDAPi, path traversal, …)\n"
+              + "  under a random query parameter name.\n\n"
+              + "Rate limit: 2 req/s (~" + etaSeconds + "s minimum).\n"
+              + "All traffic goes through Burp's HTTP stack (upstream proxy honoured).\n\n"
+              + "WARNING: this is active intrusive probing. Only run against targets\n"
+              + "where the program policy allows WAF testing — some bug-bounty programs\n"
+              + "treat it as out of scope or an abuse of the security control.\n\n"
+              + "Proceed?",
+                "XagentAI — Active WAF Detection",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION) {
+            log.logToOutput("[ACTIVE_WAF] operator cancelled the confirmation dialog.");
+            return;
+        }
+
+        AtomicBoolean cancelFlag = new AtomicBoolean(false);
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        ActiveWafWaitingDialog waiting = showActiveWafWaitingDialog(
+                url, payloadCount, cancelFlag, worker);
+
+        Thread t = ExtensionLifecycle.startTracked(api, () -> {
+            long start = System.nanoTime();
+            try {
+                ActiveWafProber.ProbeResult result = ActiveWafProber.probe(
+                        api, rr.request(), delayMs, cancelFlag,
+                        done -> SwingUtilities.invokeLater(
+                                () -> waiting.updateProgress(done, payloadCount)));
+                long ms = (System.nanoTime() - start) / 1_000_000L;
+                SwingUtilities.invokeLater(() -> {
+                    waiting.dialog.dispose();
+                    log.logToOutput("[ACTIVE_WAF] done in " + ms + "ms — "
+                            + result.toString());
+                    Runnable bypassCallback = null;
+                    try {
+                        var matches = WafSignatures.get().matchBlind(result.blocked);
+                        if (!matches.isEmpty()) {
+                            String top = matches.keySet().iterator().next();
+                            bypassCallback = () -> wafBypassForRequestResponse(rr, top);
+                        }
+                    } catch (RuntimeException ignored) {}
+                    ActiveWafResultDialog d = new ActiveWafResultDialog(
+                            api, result, url, bypassCallback);
+                    ExtensionLifecycle.trackWindow(d);
+                    d.setVisible(true);
+                });
+            } catch (RuntimeException ex) {
+                SwingUtilities.invokeLater(() -> {
+                    waiting.dialog.dispose();
+                    log.logToError("[ACTIVE_WAF] unexpected error: " + ex);
+                    JOptionPane.showMessageDialog(ExtensionLifecycle.suiteFrame(),
+                            "Active WAF probe failed:\n\n" + ex.getMessage(),
+                            "XagentAI — error", JOptionPane.WARNING_MESSAGE);
+                });
+            }
+        }, "xagentai-active-waf");
+        worker.set(t);
+    }
+
+    /** Small holder returned by {@link #showActiveWafWaitingDialog} so the
+     *  worker can refer to the progress bar / label without stashing them as
+     *  client properties (JDialog doesn't have putClientProperty on itself). */
+    private static final class ActiveWafWaitingDialog {
+        final JDialog dialog;
+        final JProgressBar bar;
+        final JLabel label;
+        final String url;
+
+        ActiveWafWaitingDialog(JDialog dialog, JProgressBar bar, JLabel label, String url) {
+            this.dialog = dialog;
+            this.bar = bar;
+            this.label = label;
+            this.url = url;
+        }
+
+        void updateProgress(int done, int total) {
+            if (bar != null) {
+                bar.setValue(done);
+                bar.setString(done + " / " + total);
+            }
+            if (label != null) {
+                label.setText("Probing " + url + "   ·   " + done + " of " + total + " payloads sent");
+            }
+        }
+    }
+
+    private ActiveWafWaitingDialog showActiveWafWaitingDialog(String url, int total,
+                                                              AtomicBoolean cancelled,
+                                                              AtomicReference<Thread> worker) {
+        JDialog d = new JDialog(ExtensionLifecycle.suiteFrame(),
+                "XagentAI — Active WAF probing", false);
+        d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        d.setLayout(new BorderLayout(10, 10));
+        ExtensionLifecycle.trackWindow(d);
+
+        JLabel label = new JLabel("Probing " + url + "   ·   starting...");
+        JPanel center = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        center.add(label);
+        d.add(center, BorderLayout.CENTER);
+
+        JProgressBar bar = new JProgressBar(0, total);
+        bar.setStringPainted(true);
+        bar.setString("0 / " + total);
+        JPanel south = new JPanel(new BorderLayout(6, 6));
+        south.add(bar, BorderLayout.CENTER);
+
+        JButton cancelBtn = new JButton("Cancel");
+        cancelBtn.setToolTipText("Stop sending probes. The current in-flight request "
+                + "cannot be aborted mid-way; the partial result will be shown.");
+        Runnable doCancel = () -> {
+            if (cancelled.compareAndSet(false, true)) {
+                Thread w = worker.get();
+                if (w != null) w.interrupt();
+            }
+        };
+        cancelBtn.addActionListener(e -> doCancel.run());
+        south.add(cancelBtn, BorderLayout.EAST);
+        d.add(south, BorderLayout.SOUTH);
+
+        d.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent e) { doCancel.run(); }
+        });
+
+        d.setPreferredSize(new Dimension(560, 150));
+        d.pack();
+        d.setLocationRelativeTo(ExtensionLifecycle.suiteFrame());
+        d.setVisible(true);
+        return new ActiveWafWaitingDialog(d, bar, label, url);
+    }
+
+    /** Entry point for the "Run WAF Bypass with AI" button in ActiveWafResultDialog. */
+    private void wafBypassForRequestResponse(HttpRequestResponse rr, String wafHint) {
+        if (rr == null || rr.request() == null) return;
+        AIProvider provider = providers.active();
+        if (!provider.isConfigured()) {
+            showWarn(provider.displayName() + " is not configured.\nOpen the XagentAI tab → "
+                    + provider.displayName() + " to set it up.");
+            return;
+        }
+        int statusCode = rr.hasResponse() && rr.response() != null
+                ? rr.response().statusCode() : -1;
+        String content = HttpRequestSerializer.serialize(rr);
+        if (Sanitizer.shouldRedact(config.sanitizationMode(), provider.kind())) {
+            content = Sanitizer.redactHeaders(content);
+        }
+        String userMessage =
+                "DETECTED WAF (confirmed by Active WAF Detection): " + wafHint + "\n"
+              + "BLOCKING STATUS CODE: " + (statusCode < 0 ? "unknown" : statusCode) + "\n\n"
+              + "Generate WAF bypass variants of the ORIGINAL request below. The request "
+              + "and the WAF's response follow:\n\n" + content;
+        String systemPrompt = effectiveSystemPrompt(WAF_BYPASS_SYSTEM_PROMPT);
+        log.logToOutput("[WAF_BYPASS] fingerprint=" + wafHint + " status=" + statusCode
+                + " provider=" + provider.displayName() + " (from Active WAF Detection)");
+        askAndShow(provider, systemPrompt, userMessage,
+                "WAF_BYPASS/" + wafHint, rr.request());
     }
 
     private List<HttpRequestResponse> resolveHttpSelection(ContextMenuEvent event) {

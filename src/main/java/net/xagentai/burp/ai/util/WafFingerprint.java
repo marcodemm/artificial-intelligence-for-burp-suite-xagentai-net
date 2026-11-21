@@ -35,6 +35,33 @@ public final class WafFingerprint {
 
     public static String detect(HttpResponse response) {
         if (response == null) return UNKNOWN;
+        String native_ = detectNative(response);
+        if (native_ != null && !native_.equals(UNKNOWN) && !native_.startsWith("Unknown (")) {
+            // Our native detector already matched one of the 13 strong
+            // signatures — prefer it over the broader catalog.
+            return native_;
+        }
+        // Fallback to the identYwaf catalog (~95 WAFs). Build a textual
+        // approximation of the raw response so the catalog's regexes have
+        // headers and body to look at.
+        try {
+            String catalog = WafSignatures.get().matchPassive(rawTextOf(response));
+            if (catalog != null) return catalog;
+        } catch (RuntimeException ignored) {
+            // Catalog loading / regex blow-up: fall through to native's fallback.
+        }
+        return native_;
+    }
+
+    /**
+     * Native-only detection (13 strong CDN signatures), no catalog fallback.
+     * Call this when you want to probe for well-known CDN headers
+     * (e.g. {@code Server: cloudflare}, {@code CF-Ray}) that identYwaf's
+     * catalog deliberately does NOT match — identYwaf keys WAFs by their
+     * block-page text, not by presence of a CDN in the chain.
+     */
+    public static String detectNative(HttpResponse response) {
+        if (response == null) return UNKNOWN;
         Map<String, String> flat = new HashMap<>();
         List<HttpHeader> hs = response.headers();
         if (hs != null) {
@@ -52,6 +79,24 @@ public final class WafFingerprint {
             body = "";
         }
         return detectFromFlat(flat, body == null ? "" : body, response.statusCode());
+    }
+
+    private static String rawTextOf(HttpResponse response) {
+        StringBuilder raw = new StringBuilder();
+        List<HttpHeader> hs = response.headers();
+        if (hs != null) {
+            for (HttpHeader h : hs) {
+                if (h == null || h.name() == null) continue;
+                raw.append(h.name()).append(": ").append(h.value() == null ? "" : h.value())
+                   .append("\r\n");
+            }
+        }
+        raw.append("\r\n");
+        try {
+            String body = response.bodyToString();
+            if (body != null) raw.append(body);
+        } catch (RuntimeException ignored) {}
+        return raw.toString();
     }
 
     static String detectFromFlat(Map<String, String> headers, String body, int statusCode) {

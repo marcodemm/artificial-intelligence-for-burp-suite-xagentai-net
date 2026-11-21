@@ -469,7 +469,17 @@ public final class ConfigPanel extends JPanel {
               + "    Door, Wordfence or Unknown) and asks the AI for 5-15 concrete\n"
               + "    bypass-variant requests tailored to that WAF; Send to Repeater\n"
               + "    opens each one in its own tab. Only runs on a single row that\n"
-              + "    already has a response.\n\n"
+              + "    already has a response. Passive fingerprinting also falls back\n"
+              + "    to the identYwaf 95-WAF catalog when the native 13 signatures\n"
+              + "    don't match.\n"
+              + "  • Active WAF Detection — opt-in active probing that sends identYwaf's\n"
+              + "    catalog of 45 crafted payloads (SQLi, XSS, XXE, LDAPi, path\n"
+              + "    traversal, …) at 2 req/s, builds the blocking bit-vector, and\n"
+              + "    identifies the WAF by exact-or-partial match against the 95-WAF\n"
+              + "    catalog. Shows a confirmation pop-up before sending any traffic;\n"
+              + "    use only on targets authorised for active WAF probing. Result\n"
+              + "    dialog chains into WAF Bypass with AI with the detected WAF as\n"
+              + "    a seed hint.\n\n"
               + "RESULT DIALOG\n"
               + "  • Analysis rendered from Markdown to HTML.\n"
               + "  • Send to Repeater — the AI turns each proposed test into a real HTTP\n"
@@ -488,7 +498,12 @@ public final class ConfigPanel extends JPanel {
               + "  Sanitize PII combo (Active / Inactive / Auto). In Auto, sensitive header\n"
               + "  values (Authorization, Cookie, API-key headers) are redacted only when\n"
               + "  the active provider is cloud-hosted; local providers always receive the\n"
-              + "  request as-is since nothing leaves the machine.");
+              + "  request as-is since nothing leaves the machine.\n\n"
+              + "CREDITS\n"
+              + "  Active WAF Detection + the 95-WAF signature catalog are ported from\n"
+              + "  identYwaf (https://github.com/stamparm/identYwaf), MIT, Copyright\n"
+              + "  2019-2026 Miroslav Stampar. See NOTICE-identywaf.txt in the extension\n"
+              + "  source tree for the full license notice.");
         desc.setEditable(false);
         desc.setOpaque(false);
         desc.setLineWrap(true);
